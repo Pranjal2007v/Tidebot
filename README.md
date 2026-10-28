@@ -5,7 +5,6 @@
 > Status: early development. The name "Tidebot" is a placeholder.
 
 ---
-
 ## Why Tidebot?
 
 Maintainers lose hours every week to chores:
