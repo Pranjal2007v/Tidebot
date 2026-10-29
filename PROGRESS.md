@@ -26,4 +26,4 @@ The spec is [README.md](README.md). Work follows its [Roadmap](README.md#roadmap
 |---|---|---|---|---|
 | A | Pranjal2007v | pranjalgangwar910@gmail.com | `81827ce15d495ed27edd4545acd0ca4afc88c798` | feat: add package skeleton and webhook signature verification |
 | B | ishitasharma2490 | ishitasharma2490@gmail.com | `e896ba3be52846557021b32337c7aa20519dd4f9` | feat: parse :tide commands and bare /lgtm from comments |
-| C | bitflicker64 | himnshuverma10152006@gmail.com | *(this commit, filled in next run)* | feat: load .tide.yml config and start PROGRESS.md |
+| C | bitflicker64 | himnshuverma10152006@gmail.com | `49da75cb268398e899381fc9e629047d32995384` | feat: load .tide.yml config and start PROGRESS.md |
