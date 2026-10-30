@@ -51,3 +51,27 @@ The spec is [README.md](README.md). Work follows its [Roadmap](README.md#roadmap
 | A | ishitasharma2490 | ishitasharma2490@gmail.com | `23e5e83f65138f476be7b125271d6b3914484734` | feat: add permission tiers and per-command access checks |
 | B | bitflicker64 | himnshuverma10152006@gmail.com | `b13b23e6bd5629eec4758e669c2bda309744c6e3` | feat: add hourly rate limits with state kept in state.json |
 | C | Pranjal2007v | pranjalgangwar910@gmail.com | `bbc6f9e816da8c167b2febd6429ac62b8e7a988d` | feat: route comments and receive webhooks with FastAPI |
+
+## Run 3 (2026-10-30)
+
+**Estimated complete:** 15%
+
+**Added**
+
+- `tidebot/github.py`: a small REST client for the GitHub App. `AppAuth` signs an RS256 JWT with the App key and caches installation tokens until a minute before they expire. `GitHubClient` posts comments, adds and removes labels, opens and closes issues, assigns people, requests reviewers, reads a user's permission level (`role_name`, so triage and maintain are told apart), checks stars and fetches `.tide.yml`. `httpx` and `PyJWT[crypto]` are now runtime dependencies.
+- `tidebot/workflow.py`: handlers for `/label` (`-name` removes a label), `/close`, `/reopen`, `/assign` (no target or `me` means the author) and `/cc` (requests a review on a PR, mentions on an issue).
+- `tidebot/help.py` and the receiver wiring in `tidebot/app.py`: `/help` lists the commands the caller's tier may run, grouped as in [Commands](README.md#commands). With `TIDEBOT_APP_ID` and `TIDEBOT_PRIVATE_KEY` set, the receiver looks up the author's real permission and the repo's config, checks stars only when the star gate matters, runs the commands above and posts one reply holding `/help` output, denial reasons and API failures. Without credentials it behaves as before.
+
+**Next 5%**
+
+- `/lgtm`, `/hold` and `/wip` as labels (`lgtm`, `do-not-merge/hold`, `do-not-merge/wip`), with `/hold cancel` and `/wip cancel` to remove them.
+- `/retitle`, `/lock`, `/milestone` and `/duplicate #N` (close with a link and a `duplicate` label).
+- `/approve` and `/merge`: approve the PR, and merge only when CI is green and it has an approval, per [Commands](README.md#commands).
+
+**Blockers:** none. Nothing has run against a live GitHub App yet; the API client is covered by mocked HTTP tests.
+
+| Commit | GitHub | Email | SHA | Message |
+|---|---|---|---|---|
+| A | bitflicker64 | himnshuverma10152006@gmail.com | `2b3db8d9340153b4838301a5e9c6799b3a37e30f` | feat: add GitHub API client with App installation tokens |
+| B | Pranjal2007v | pranjalgangwar910@gmail.com | `9cb9f3d621a47e80330c90ecea2a94071a3d164c` | feat: run /label, /close, /reopen, /assign and /cc through the API |
+| C | ishitasharma2490 | ishitasharma2490@gmail.com | *(this commit, filled in next run)* | feat: reply to commands on GitHub and add /help |
