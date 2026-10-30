@@ -50,4 +50,4 @@ The spec is [README.md](README.md). Work follows its [Roadmap](README.md#roadmap
 |---|---|---|---|---|
 | A | ishitasharma2490 | ishitasharma2490@gmail.com | `23e5e83f65138f476be7b125271d6b3914484734` | feat: add permission tiers and per-command access checks |
 | B | bitflicker64 | himnshuverma10152006@gmail.com | `b13b23e6bd5629eec4758e669c2bda309744c6e3` | feat: add hourly rate limits with state kept in state.json |
-| C | Pranjal2007v | pranjalgangwar910@gmail.com | *(this commit, filled in next run)* | feat: route comments and receive webhooks with FastAPI |
+| C | Pranjal2007v | pranjalgangwar910@gmail.com | `bbc6f9e816da8c167b2febd6429ac62b8e7a988d` | feat: route comments and receive webhooks with FastAPI |
