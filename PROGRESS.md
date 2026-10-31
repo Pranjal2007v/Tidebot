@@ -75,3 +75,27 @@ The spec is [README.md](README.md). Work follows its [Roadmap](README.md#roadmap
 | A | bitflicker64 | himnshuverma10152006@gmail.com | `2b3db8d9340153b4838301a5e9c6799b3a37e30f` | feat: add GitHub API client with App installation tokens |
 | B | Pranjal2007v | pranjalgangwar910@gmail.com | `9cb9f3d621a47e80330c90ecea2a94071a3d164c` | feat: run /label, /close, /reopen, /assign and /cc through the API |
 | C | ishitasharma2490 | ishitasharma2490@gmail.com | `01785ca7b9057f5f42c99a6065f2d2f0bd16b8f6` | feat: reply to commands on GitHub and add /help |
+
+## Run 4 (2026-10-31)
+
+**Estimated complete:** 20%
+
+**Added**
+
+- `/lgtm`, `/hold` and `/wip` in `tidebot/workflow.py`. They add the `lgtm`, `do-not-merge/hold` and `do-not-merge/wip` labels, and `cancel` as the first word removes them. `/lgtm` works only on PRs. Any other text after `/hold` counts as a reason and still holds.
+- `/retitle`, `/lock` (with an optional GitHub lock reason, or `cancel` to unlock), `/milestone` (matches an open milestone by title, `clear` removes it) and `/duplicate #N` (adds a `duplicate` label, closes, and replies "Duplicate of #N" so GitHub links the two). New client methods: `set_title`, `set_milestone`, `find_milestone`, `lock`, `unlock`.
+- `/approve` and `/merge`. `/approve` posts an approving review from the App that names who asked for it. `/merge [squash|rebase]` merges only when the PR is open, not a draft, free of conflicts and hold/wip labels, has an approval and no requested changes, and CI is green. CI covers commit statuses and check runs together. A PR with no CI results at all is not merged, since [Commands](README.md#commands) says `/merge` needs CI. The merge pins the head SHA, so a push made after the check makes it fail. When it refuses, the reply lists every reason.
+
+**Next 5%**
+
+- `/ship` (approve and merge in one step), `/vote`, `/kudos`, `/ping`, `/joke` and `/size` from [Community](README.md#community-about-10).
+- `/remind 2h ...`: save reminders in `state.json` and post them once they are due.
+- `/stats`: count commands run per repo in `state.json` and reply with totals.
+
+**Blockers:** none. Still not run against a live GitHub App; API calls are covered by mocked tests.
+
+| Commit | GitHub | Email | SHA | Message |
+|---|---|---|---|---|
+| A | Pranjal2007v | pranjalgangwar910@gmail.com | `e1a2c9d8284ac658d7dfe929f82e01bec660bcf9` | feat: add /lgtm, /hold and /wip as labels with cancel |
+| B | ishitasharma2490 | ishitasharma2490@gmail.com | `4d1924d69dde666a5d16f9972aa64ed7b21c16f1` | feat: add /retitle, /lock, /milestone and /duplicate |
+| C | bitflicker64 | himnshuverma10152006@gmail.com | *(this commit, filled in next run)* | feat: add /approve and /merge gated on CI and approval |

@@ -154,6 +154,56 @@ def _lgtm(gh: GitHubClient, t: Target, args: str) -> Optional[str]:
     return _toggle_label(LGTM_LABEL)(gh, t, args)
 
 
+def _approve(gh: GitHubClient, t: Target, args: str) -> Optional[str]:
+    if not t.is_pr:
+        return "`/approve` only works on pull requests."
+    gh.approve(t.repo, t.number, f"Approved by @{t.author} with `/approve`.")
+    return None
+
+
+_MERGE_METHODS = {"merge", "squash", "rebase"}
+
+
+def merge_blockers(gh: GitHubClient, t: Target, pr: dict) -> List[str]:
+    """List what stops ``pr`` from merging; empty means it can go in."""
+    blockers = []
+    if pr.get("state") != "open":
+        blockers.append("it is not open")
+    if pr.get("draft"):
+        blockers.append("it is a draft")
+    labels = {label.get("name") for label in pr.get("labels", [])}
+    for label in sorted(labels & {HOLD_LABEL, WIP_LABEL}):
+        blockers.append(f"it has the `{label}` label")
+    if pr.get("mergeable") is False:
+        blockers.append("it has merge conflicts")
+    reviews = gh.review_states(t.repo, t.number).values()
+    if "CHANGES_REQUESTED" in reviews:
+        blockers.append("a reviewer requested changes")
+    elif "APPROVED" not in reviews:
+        blockers.append("it has no approval")
+    ci = gh.ci_state(t.repo, pr["head"]["sha"])
+    if ci != "success":
+        blockers.append({"none": "no CI has reported on it",
+                         "pending": "CI is still running",
+                         "failure": "CI is failing"}[ci])
+    return blockers
+
+
+def _merge(gh: GitHubClient, t: Target, args: str) -> Optional[str]:
+    if not t.is_pr:
+        return "`/merge` only works on pull requests."
+    words = [w.lower() for w in _words(args)]
+    method = words[0] if words else "merge"
+    if method not in _MERGE_METHODS:
+        return "Usage: `:tide /merge`, `/merge squash` or `/merge rebase`."
+    pr = gh.pull(t.repo, t.number)
+    blockers = merge_blockers(gh, t, pr)
+    if blockers:
+        return "Not merging: " + "; ".join(blockers) + "."
+    gh.merge(t.repo, t.number, pr["head"]["sha"], method)
+    return None
+
+
 HANDLERS: Dict[str, Handler] = {
     "label": _label,
     "close": _close,
@@ -167,6 +217,8 @@ HANDLERS: Dict[str, Handler] = {
     "lgtm": _lgtm,
     "hold": _toggle_label(HOLD_LABEL),
     "wip": _toggle_label(WIP_LABEL),
+    "approve": _approve,
+    "merge": _merge,
 }
 
 

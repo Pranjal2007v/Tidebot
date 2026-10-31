@@ -64,7 +64,7 @@ def test_cc_on_issue_mentions():
 
 
 def test_commands_without_handler_do_nothing():
-    assert run(ISSUE, "merge") == ([], None)
+    assert run(ISSUE, "vote") == ([], None)
 
 
 def test_lgtm_labels_pr():
@@ -144,3 +144,64 @@ def test_duplicate_needs_another_issue():
     assert run(ISSUE, "duplicate")[0] == []
     assert "Usage" in run(ISSUE, "duplicate", "that one")[1]
     assert "itself" in run(ISSUE, "duplicate", "#5")[1]
+
+
+class MergeGitHub(FakeGitHub):
+    def __init__(self, pr=None, reviews=None, ci="success"):
+        super().__init__()
+        self.pr = {"state": "open", "draft": False, "mergeable": True, "labels": [],
+                   "head": {"sha": "abc"}, **(pr or {})}
+        self.reviews = {"bob": "APPROVED"} if reviews is None else reviews
+        self.ci = ci
+
+    def pull(self, repo, number):
+        return self.pr
+
+    def review_states(self, repo, number):
+        return self.reviews
+
+    def ci_state(self, repo, sha):
+        return self.ci
+
+
+def merge(gh, args=""):
+    return run_command(gh, PR, Command("merge", args))
+
+
+def test_approve_posts_review_on_pr_only():
+    calls, reply = run(PR, "approve")
+    assert calls == [("approve", "o/r", 6, "Approved by @alice with `/approve`.")]
+    assert reply is None
+    assert "pull requests" in run(ISSUE, "approve")[1]
+
+
+def test_merge_when_green_and_approved():
+    gh = MergeGitHub()
+    assert merge(gh, "squash") is None
+    assert gh.calls == [("merge", "o/r", 6, "abc", "squash")]
+
+
+def test_merge_lists_every_blocker():
+    gh = MergeGitHub(pr={"draft": True, "mergeable": False,
+                         "labels": [{"name": "do-not-merge/hold"}]},
+                     reviews={}, ci="pending")
+    reply = merge(gh)
+    assert gh.calls == []
+    for part in ("draft", "do-not-merge/hold", "conflicts", "no approval", "still running"):
+        assert part in reply
+
+
+def test_merge_blocked_by_requested_changes_and_failing_ci():
+    gh = MergeGitHub(reviews={"bob": "APPROVED", "carol": "CHANGES_REQUESTED"}, ci="failure")
+    reply = merge(gh)
+    assert "requested changes" in reply and "CI is failing" in reply
+    assert "no approval" not in reply
+
+
+def test_merge_needs_ci_results():
+    assert "no CI" in merge(MergeGitHub(ci="none"))
+
+
+def test_merge_rejects_unknown_method_and_issues():
+    assert "Usage" in merge(MergeGitHub(), "yolo")
+    assert "pull requests" in run(ISSUE, "merge")[1]

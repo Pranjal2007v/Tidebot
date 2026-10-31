@@ -133,3 +133,42 @@ def test_lock_and_unlock():
     gh.unlock("o/r", 3)
     assert calls[0].method == "PUT" and json.loads(calls[0].content) == {"lock_reason": "spam"}
     assert calls[1].method == "DELETE" and calls[1].url.path == "/repos/o/r/issues/3/lock"
+
+
+def test_review_states_keeps_latest_verdict():
+    _, gh = client(lambda r: httpx.Response(200, json=[
+        {"user": {"login": "bob"}, "state": "CHANGES_REQUESTED"},
+        {"user": {"login": "bob"}, "state": "COMMENTED"},
+        {"user": {"login": "bob"}, "state": "APPROVED"},
+        {"user": {"login": "carol"}, "state": "APPROVED"},
+        {"user": {"login": "carol"}, "state": "DISMISSED"},
+    ]))
+    assert gh.review_states("o/r", 1) == {"bob": "APPROVED"}
+
+
+def ci_client(statuses, runs):
+    def handler(request):
+        if request.url.path.endswith("/status"):
+            return httpx.Response(200, json={"statuses": statuses})
+        return httpx.Response(200, json={"check_runs": runs})
+    return client(handler)[1]
+
+
+def test_ci_state():
+    ok = {"status": "completed", "conclusion": "success"}
+    assert ci_client([], []).ci_state("o/r", "s") == "none"
+    assert ci_client([{"state": "success"}], [ok, {"status": "completed",
+                     "conclusion": "skipped"}]).ci_state("o/r", "s") == "success"
+    assert ci_client([], [ok, {"status": "in_progress"}]).ci_state("o/r", "s") == "pending"
+    assert ci_client([{"state": "pending"}], [{"status": "completed",
+                     "conclusion": "failure"}]).ci_state("o/r", "s") == "failure"
+    assert ci_client([{"state": "error"}], []).ci_state("o/r", "s") == "failure"
+
+
+def test_merge_and_approve_requests():
+    calls, gh = client(lambda r: httpx.Response(200, json={}))
+    gh.merge("o/r", 2, "abc", "squash")
+    gh.approve("o/r", 2, "ok")
+    assert calls[0].method == "PUT" and calls[0].url.path == "/repos/o/r/pulls/2/merge"
+    assert json.loads(calls[0].content) == {"sha": "abc", "merge_method": "squash"}
+    assert json.loads(calls[1].content) == {"event": "APPROVE", "body": "ok"}

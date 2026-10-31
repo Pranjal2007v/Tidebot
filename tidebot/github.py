@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import calendar
 import time
-from typing import Callable, Dict, Iterable, Optional, Tuple
+from typing import Callable, Dict, Iterable, List, Optional, Tuple
 
 import httpx
 import jwt
@@ -20,6 +20,8 @@ _ACCEPT = "application/vnd.github+json"
 _API_VERSION = "2022-11-28"
 # Refresh a cached installation token this many seconds before it expires.
 _TOKEN_MARGIN = 60
+# Check-run conclusions that don't block a merge.
+_PASSING_CHECKS = {"success", "neutral", "skipped"}
 # How many pages of a user's stars to read before giving up on the star check.
 _STAR_PAGES = 10
 
@@ -138,6 +140,52 @@ class GitHubClient:
     def request_reviewers(self, repo: str, number: int, logins: Iterable[str]) -> None:
         self._request("POST", f"/repos/{repo}/pulls/{number}/requested_reviewers",
                       json={"reviewers": list(logins)})
+
+    def pull(self, repo: str, number: int) -> dict:
+        return self._request("GET", f"/repos/{repo}/pulls/{number}").json()
+
+    def approve(self, repo: str, number: int, body: str) -> None:
+        self._request("POST", f"/repos/{repo}/pulls/{number}/reviews",
+                      json={"event": "APPROVE", "body": body})
+
+    def review_states(self, repo: str, number: int) -> Dict[str, str]:
+        """Return each reviewer's latest deciding review: APPROVED or CHANGES_REQUESTED."""
+        res = self._request("GET", f"/repos/{repo}/pulls/{number}/reviews",
+                            params={"per_page": 100})
+        latest: Dict[str, str] = {}
+        # Reviews come oldest first; comments alone don't change a verdict.
+        for review in res.json():
+            state = review.get("state")
+            login = (review.get("user") or {}).get("login")
+            if login and state in ("APPROVED", "CHANGES_REQUESTED", "DISMISSED"):
+                latest[login] = state
+        return {k: v for k, v in latest.items() if v != "DISMISSED"}
+
+    def ci_state(self, repo: str, sha: str) -> str:
+        """Fold commit statuses and check runs into success, pending, failure or none."""
+        status = self._request("GET", f"/repos/{repo}/commits/{sha}/status").json()
+        runs: List[dict] = self._request(
+            "GET", f"/repos/{repo}/commits/{sha}/check-runs",
+            params={"per_page": 100}).json().get("check_runs", [])
+        states = [s.get("state") for s in status.get("statuses", [])]
+        for run in runs:
+            if run.get("status") != "completed":
+                states.append("pending")
+            else:
+                states.append("success" if run.get("conclusion") in _PASSING_CHECKS
+                              else "failure")
+        if not states:
+            return "none"
+        if any(s in ("failure", "error") for s in states):
+            return "failure"
+        if any(s != "success" for s in states):
+            return "pending"
+        return "success"
+
+    def merge(self, repo: str, number: int, sha: str, method: str = "merge") -> None:
+        # Passing the head sha makes GitHub refuse if someone pushed meanwhile.
+        self._request("PUT", f"/repos/{repo}/pulls/{number}/merge",
+                      json={"sha": sha, "merge_method": method})
 
     def permission(self, repo: str, login: str) -> Optional[str]:
         """Return ``login``'s permission level on ``repo``, or None if they have none."""
