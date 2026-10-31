@@ -74,4 +74,4 @@ The spec is [README.md](README.md). Work follows its [Roadmap](README.md#roadmap
 |---|---|---|---|---|
 | A | bitflicker64 | himnshuverma10152006@gmail.com | `2b3db8d9340153b4838301a5e9c6799b3a37e30f` | feat: add GitHub API client with App installation tokens |
 | B | Pranjal2007v | pranjalgangwar910@gmail.com | `9cb9f3d621a47e80330c90ecea2a94071a3d164c` | feat: run /label, /close, /reopen, /assign and /cc through the API |
-| C | ishitasharma2490 | ishitasharma2490@gmail.com | *(this commit, filled in next run)* | feat: reply to commands on GitHub and add /help |
+| C | ishitasharma2490 | ishitasharma2490@gmail.com | `01785ca7b9057f5f42c99a6065f2d2f0bd16b8f6` | feat: reply to commands on GitHub and add /help |

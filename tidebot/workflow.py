@@ -1,4 +1,4 @@
-"""Carry out the first workflow commands through the GitHub API.
+"""Carry out workflow commands through the GitHub API.
 
 The router has already checked permission and rate limits, so these
 handlers only do the work. Each returns the text to reply with, or None
@@ -77,12 +77,42 @@ def _cc(gh: GitHubClient, t: Target, args: str) -> Optional[str]:
 
 Handler = Callable[[GitHubClient, Target, str], Optional[str]]
 
+# Labels that stand for a reviewer's verdict or a merge blocker.
+LGTM_LABEL = "lgtm"
+HOLD_LABEL = "do-not-merge/hold"
+WIP_LABEL = "do-not-merge/wip"
+
+
+def _cancelled(args: str) -> bool:
+    return [w.lower() for w in _words(args)][:1] == ["cancel"]
+
+
+def _toggle_label(label: str) -> Handler:
+    """Add ``label``, or remove it when the args start with ``cancel``."""
+    def handler(gh: GitHubClient, t: Target, args: str) -> Optional[str]:
+        if _cancelled(args):
+            gh.remove_label(t.repo, t.number, label)
+        else:
+            gh.add_labels(t.repo, t.number, [label])
+        return None
+    return handler
+
+
+def _lgtm(gh: GitHubClient, t: Target, args: str) -> Optional[str]:
+    if not t.is_pr:
+        return "`/lgtm` only works on pull requests."
+    return _toggle_label(LGTM_LABEL)(gh, t, args)
+
+
 HANDLERS: Dict[str, Handler] = {
     "label": _label,
     "close": _close,
     "reopen": _reopen,
     "assign": _assign,
     "cc": _cc,
+    "lgtm": _lgtm,
+    "hold": _toggle_label(HOLD_LABEL),
+    "wip": _toggle_label(WIP_LABEL),
 }
 
 

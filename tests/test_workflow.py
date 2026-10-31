@@ -65,3 +65,31 @@ def test_cc_on_issue_mentions():
 
 def test_commands_without_handler_do_nothing():
     assert run(ISSUE, "merge") == ([], None)
+
+
+def test_lgtm_labels_pr():
+    calls, reply = run(PR, "lgtm")
+    assert calls == [("add_labels", "o/r", 6, ["lgtm"])]
+    assert reply is None
+
+
+def test_lgtm_cancel_removes_label():
+    assert run(PR, "lgtm", "cancel")[0] == [("remove_label", "o/r", 6, "lgtm")]
+
+
+def test_lgtm_on_issue_is_refused():
+    calls, reply = run(ISSUE, "lgtm")
+    assert calls == []
+    assert "pull requests" in reply
+
+
+def test_hold_and_wip_toggle_labels():
+    assert run(PR, "hold")[0] == [("add_labels", "o/r", 6, ["do-not-merge/hold"])]
+    assert run(PR, "hold", "Cancel")[0] == [("remove_label", "o/r", 6, "do-not-merge/hold")]
+    assert run(ISSUE, "wip")[0] == [("add_labels", "o/r", 5, ["do-not-merge/wip"])]
+    assert run(ISSUE, "wip", "cancel")[0] == [("remove_label", "o/r", 5, "do-not-merge/wip")]
+
+
+def test_hold_with_reason_still_holds():
+    assert run(PR, "hold", "waiting on design review")[0] == [
+        ("add_labels", "o/r", 6, ["do-not-merge/hold"])]
