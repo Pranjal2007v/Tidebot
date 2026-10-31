@@ -15,6 +15,9 @@ from .commands import Command
 from .github import GitHubClient
 
 _SPLIT = re.compile(r"[\s,]+")
+_ISSUE_REF = re.compile(r"^#?(\d+)$")
+# Reasons GitHub accepts when locking a conversation.
+_LOCK_REASONS = {"off-topic", "too heated", "resolved", "spam"}
 
 
 @dataclass(frozen=True)
@@ -75,6 +78,53 @@ def _cc(gh: GitHubClient, t: Target, args: str) -> Optional[str]:
     return "cc " + " ".join("@" + name for name in logins)
 
 
+def _retitle(gh: GitHubClient, t: Target, args: str) -> Optional[str]:
+    title = args.strip()
+    if not title:
+        return "Usage: `:tide /retitle New title`."
+    gh.set_title(t.repo, t.number, title)
+    return None
+
+
+def _lock(gh: GitHubClient, t: Target, args: str) -> Optional[str]:
+    reason = " ".join(_words(args)).lower()
+    if reason == "cancel":
+        gh.unlock(t.repo, t.number)
+        return None
+    if reason and reason not in _LOCK_REASONS:
+        return "Lock reasons are " + ", ".join(f"`{r}`" for r in sorted(_LOCK_REASONS)) + "."
+    gh.lock(t.repo, t.number, reason or None)
+    return None
+
+
+def _milestone(gh: GitHubClient, t: Target, args: str) -> Optional[str]:
+    title = args.strip()
+    if not title:
+        return "Usage: `:tide /milestone v1.0`, or `/milestone clear`."
+    if title.lower() == "clear":
+        gh.set_milestone(t.repo, t.number, None)
+        return None
+    number = gh.find_milestone(t.repo, title)
+    if number is None:
+        return f"There is no open milestone called `{title}`."
+    gh.set_milestone(t.repo, t.number, number)
+    return None
+
+
+def _duplicate(gh: GitHubClient, t: Target, args: str) -> Optional[str]:
+    words = _words(args)
+    match = _ISSUE_REF.match(words[0]) if words else None
+    if not match:
+        return "Usage: `:tide /duplicate #123`."
+    original = int(match.group(1))
+    if original == t.number:
+        return "An issue can't be a duplicate of itself."
+    gh.add_labels(t.repo, t.number, ["duplicate"])
+    gh.set_state(t.repo, t.number, "closed")
+    # GitHub links the two when a comment says "Duplicate of #N".
+    return f"Duplicate of #{original}"
+
+
 Handler = Callable[[GitHubClient, Target, str], Optional[str]]
 
 # Labels that stand for a reviewer's verdict or a merge blocker.
@@ -110,6 +160,10 @@ HANDLERS: Dict[str, Handler] = {
     "reopen": _reopen,
     "assign": _assign,
     "cc": _cc,
+    "retitle": _retitle,
+    "lock": _lock,
+    "milestone": _milestone,
+    "duplicate": _duplicate,
     "lgtm": _lgtm,
     "hold": _toggle_label(HOLD_LABEL),
     "wip": _toggle_label(WIP_LABEL),

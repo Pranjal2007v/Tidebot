@@ -93,3 +93,54 @@ def test_hold_and_wip_toggle_labels():
 def test_hold_with_reason_still_holds():
     assert run(PR, "hold", "waiting on design review")[0] == [
         ("add_labels", "o/r", 6, ["do-not-merge/hold"])]
+
+
+def test_retitle():
+    assert run(ISSUE, "retitle", " Crash on start ")[0] == [("set_title", "o/r", 5, "Crash on start")]
+    calls, reply = run(ISSUE, "retitle")
+    assert calls == [] and "Usage" in reply
+
+
+def test_lock_with_and_without_reason():
+    assert run(ISSUE, "lock")[0] == [("lock", "o/r", 5, None)]
+    assert run(ISSUE, "lock", "Too heated")[0] == [("lock", "o/r", 5, "too heated")]
+    assert run(ISSUE, "lock", "cancel")[0] == [("unlock", "o/r", 5)]
+
+
+def test_lock_rejects_unknown_reason():
+    calls, reply = run(ISSUE, "lock", "boring")
+    assert calls == []
+    assert "`spam`" in reply
+
+
+class MilestoneGitHub(FakeGitHub):
+    def find_milestone(self, repo, title):
+        self.calls.append(("find_milestone", repo, title))
+        return 3 if title.lower() == "v1.0" else None
+
+
+def test_milestone_sets_found_milestone():
+    gh = MilestoneGitHub()
+    assert run_command(gh, ISSUE, Command("milestone", "V1.0")) is None
+    assert gh.calls == [("find_milestone", "o/r", "V1.0"), ("set_milestone", "o/r", 5, 3)]
+
+
+def test_milestone_unknown_and_clear():
+    gh = MilestoneGitHub()
+    reply = run_command(gh, ISSUE, Command("milestone", "v9"))
+    assert "no open milestone" in reply
+    assert gh.calls == [("find_milestone", "o/r", "v9")]
+    assert run(ISSUE, "milestone", "clear")[0] == [("set_milestone", "o/r", 5, None)]
+
+
+def test_duplicate_labels_closes_and_links():
+    calls, reply = run(ISSUE, "duplicate", "#2")
+    assert calls == [("add_labels", "o/r", 5, ["duplicate"]), ("set_state", "o/r", 5, "closed")]
+    assert reply == "Duplicate of #2"
+    assert run(ISSUE, "duplicate", "2")[1] == "Duplicate of #2"
+
+
+def test_duplicate_needs_another_issue():
+    assert run(ISSUE, "duplicate")[0] == []
+    assert "Usage" in run(ISSUE, "duplicate", "that one")[1]
+    assert "itself" in run(ISSUE, "duplicate", "#5")[1]

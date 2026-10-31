@@ -107,6 +107,30 @@ class GitHubClient:
         """Set an issue or PR to ``open`` or ``closed``."""
         self._request("PATCH", f"/repos/{repo}/issues/{number}", json={"state": state})
 
+    def set_title(self, repo: str, number: int, title: str) -> None:
+        self._request("PATCH", f"/repos/{repo}/issues/{number}", json={"title": title})
+
+    def set_milestone(self, repo: str, number: int, milestone: Optional[int]) -> None:
+        """Put the issue in milestone number ``milestone``, or take it out with None."""
+        self._request("PATCH", f"/repos/{repo}/issues/{number}", json={"milestone": milestone})
+
+    def find_milestone(self, repo: str, title: str) -> Optional[int]:
+        """Return the number of the open milestone called ``title`` (any case), or None."""
+        res = self._request("GET", f"/repos/{repo}/milestones",
+                            params={"state": "open", "per_page": 100})
+        wanted = title.lower()
+        for m in res.json():
+            if m.get("title", "").lower() == wanted:
+                return m["number"]
+        return None
+
+    def lock(self, repo: str, number: int, reason: Optional[str] = None) -> None:
+        body = {"lock_reason": reason} if reason else {}
+        self._request("PUT", f"/repos/{repo}/issues/{number}/lock", json=body)
+
+    def unlock(self, repo: str, number: int) -> None:
+        self._request("DELETE", f"/repos/{repo}/issues/{number}/lock")
+
     def add_assignees(self, repo: str, number: int, logins: Iterable[str]) -> None:
         self._request("POST", f"/repos/{repo}/issues/{number}/assignees",
                       json={"assignees": list(logins)})

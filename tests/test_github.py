@@ -110,3 +110,26 @@ def test_installation_token_is_cached_until_near_expiry(keypair):
     assert auth.installation_token(42) == "ghs_1"
     now[0] += 600
     assert auth.installation_token(42) == "ghs_2"
+
+
+def test_find_milestone_matches_title_case_insensitively():
+    calls, gh = client(lambda r: httpx.Response(200, json=[
+        {"title": "v0.9", "number": 1}, {"title": "V1.0", "number": 4}]))
+    assert gh.find_milestone("o/r", "v1.0") == 4
+    assert gh.find_milestone("o/r", "v2") is None
+    assert calls[0].url.params["state"] == "open"
+
+
+def test_set_milestone_and_title():
+    calls, gh = client(lambda r: httpx.Response(200, json={}))
+    gh.set_milestone("o/r", 3, None)
+    gh.set_title("o/r", 3, "New")
+    assert [json.loads(c.content) for c in calls] == [{"milestone": None}, {"title": "New"}]
+
+
+def test_lock_and_unlock():
+    calls, gh = client(lambda r: httpx.Response(204))
+    gh.lock("o/r", 3, "spam")
+    gh.unlock("o/r", 3)
+    assert calls[0].method == "PUT" and json.loads(calls[0].content) == {"lock_reason": "spam"}
+    assert calls[1].method == "DELETE" and calls[1].url.path == "/repos/o/r/issues/3/lock"
