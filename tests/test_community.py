@@ -106,3 +106,24 @@ def test_votes_are_per_issue():
     c = community()
     run(c, "vote", "Ship it?")
     assert "no open vote" in c.run(None, PR, Command("vote", "yes"))
+
+
+INSTALLED = Target("o/r", 5, is_pr=False, author="alice", installation=99)
+
+
+def test_remind_saves_reminder():
+    c = community()
+    assert run(c, "remind", "1h30m look at CI", INSTALLED) == (
+        "OK @alice, I'll remind you here in 1h30m.")
+    (reminder,) = c.reminders.pending()
+    assert (reminder.number, reminder.installation, reminder.due, reminder.text) == (
+        5, 99, 1000.0 + 5400, "look at CI")
+
+
+def test_remind_checks_delay_and_installation():
+    c = community()
+    assert "Usage" in run(c, "remind", "later please", INSTALLED)
+    assert "30 days" in run(c, "remind", "5w", INSTALLED)
+    assert "30 days" in run(c, "remind", "0m", INSTALLED)
+    assert "GitHub App" in run(c, "remind", "1h")
+    assert c.reminders.pending() == []

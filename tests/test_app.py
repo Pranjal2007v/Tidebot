@@ -162,3 +162,22 @@ def test_community_commands_reply():
     c, _ = acting_client(gh)
     post(c, "issue_comment", issue_payload(":tide /ping"))
     assert gh.calls == [("post_comment", "o/r", 3, "pong")]
+
+
+def test_remind_is_saved_and_posted_on_startup_once_due():
+    store = StateStore(None)
+    gh = FakeGitHub(permission="triage")
+    app = create_app(SECRET, store, github=lambda installation: gh)
+    c = TestClient(app)
+    post(c, "issue_comment", issue_payload(":tide /remind 1m rerun CI"))
+    assert gh.calls == [("post_comment", "o/r", 3, "OK @alice, I'll remind you here in 1m.")]
+    (saved,) = store.get("reminders")
+    assert saved["installation"] == 99
+    # Make it due, then start the app: startup posts what came due while down.
+    saved["due"] = 0
+    store.set("reminders", [saved])
+    with TestClient(create_app(SECRET, store, github=lambda installation: gh)):
+        pass
+    assert gh.calls[-1] == ("post_comment", "o/r", 3,
+                            "@alice, you asked me to remind you: rerun CI")
+    assert store.get("reminders") == []

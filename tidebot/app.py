@@ -3,8 +3,9 @@
 It verifies the delivery signature, routes new issue and PR comments, and
 returns the routing result as JSON. When it has GitHub App credentials it
 also acts: it looks up the author's real permission and the repo's
-``.tide.yml``, runs the workflow commands it knows, and posts one reply with
-``/help`` output and the reason for any denied command.
+``.tide.yml``, runs the commands it knows, posts one reply with ``/help``
+output and the reason for any denied command, and posts ``/remind``
+reminders once they are due.
 
 Run it with ``uvicorn tidebot.app:app`` and ``TIDEBOT_WEBHOOK_SECRET`` set.
 Set ``TIDEBOT_APP_ID`` and ``TIDEBOT_PRIVATE_KEY`` (the path to the App's
@@ -13,8 +14,10 @@ Set ``TIDEBOT_APP_ID`` and ``TIDEBOT_PRIVATE_KEY`` (the path to the App's
 
 from __future__ import annotations
 
+import asyncio
 import json
 import os
+from contextlib import asynccontextmanager
 from typing import Callable, Optional
 
 from fastapi import FastAPI, HTTPException, Request
@@ -41,6 +44,8 @@ _ASSOCIATION_PERMISSIONS = {
 PermissionLookup = Callable[[str, dict], Optional[str]]
 # Given an installation id, return a client that acts as that installation.
 ClientFactory = Callable[[int], GitHubClient]
+# How often to look for reminders that are due, in seconds.
+REMINDER_INTERVAL = 60
 
 
 def permission_from_association(repo: str, comment: dict) -> Optional[str]:
@@ -64,10 +69,36 @@ def _reply_for(gh: GitHubClient, target: Target, action: Action,
 
 def create_app(secret: str, store: StateStore,
                permission_lookup: PermissionLookup = permission_from_association,
-               github: Optional[ClientFactory] = None) -> FastAPI:
-    app = FastAPI(title="Tidebot")
+               github: Optional[ClientFactory] = None,
+               reminder_interval: float = REMINDER_INTERVAL) -> FastAPI:
     limiter = RateLimiter(store)
     community = Community(store)
+
+    def deliver_reminders() -> None:
+        try:
+            community.reminders.deliver_due(github)
+        except Exception as err:  # keep the loop alive; the next round retries
+            print(f"tidebot: delivering reminders failed: {err!r}")
+
+    async def reminder_loop() -> None:
+        while True:
+            await asyncio.sleep(reminder_interval)
+            deliver_reminders()
+
+    @asynccontextmanager
+    async def lifespan(app: FastAPI):
+        if github is None:
+            yield
+            return
+        # Catch up on anything that came due while the bot was down.
+        deliver_reminders()
+        task = asyncio.create_task(reminder_loop())
+        try:
+            yield
+        finally:
+            task.cancel()
+
+    app = FastAPI(title="Tidebot", lifespan=lifespan)
 
     @app.get("/healthz")
     def healthz():
@@ -110,7 +141,8 @@ def create_app(secret: str, store: StateStore,
                                 config, starred)
         replied = False
         if gh is not None and actions and "number" in issue:
-            target = Target(repo, issue["number"], "pull_request" in issue, author)
+            target = Target(repo, issue["number"], "pull_request" in issue, author,
+                            installation)
             replies = [r for r in (_reply_for(gh, target, a, permission, community)
                                        for a in actions) if r]
             if replies:

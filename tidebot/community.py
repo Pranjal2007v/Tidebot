@@ -14,6 +14,7 @@ from typing import Callable, Dict, Optional
 
 from .commands import Command
 from .github import GitHubClient
+from .reminders import MAX_DELAY, MIN_DELAY, Reminders, describe, parse_delay
 from .size import changed_lines, size_label, stale_labels
 from .state import StateStore
 from .workflow import Target, _words
@@ -41,12 +42,14 @@ class Community:
         self.store = store
         self.clock = clock
         self.rng = rng or random.Random()
+        self.reminders = Reminders(store, clock)
         self.handlers: Dict[str, CommunityHandler] = {
             "ping": self._ping,
             "joke": self._joke,
             "kudos": self._kudos,
             "size": self._size,
             "vote": self._vote,
+            "remind": self._remind,
         }
 
     def handles(self, name: str) -> bool:
@@ -136,6 +139,18 @@ class Community:
         return (f"Vote opened: **{text}**\n\n"
                 "Answer with `:tide /vote yes` or `:tide /vote no`. "
                 "You can change your answer until someone runs `:tide /vote close`.")
+
+    def _remind(self, gh: GitHubClient, t: Target, args: str) -> Optional[str]:
+        parsed = parse_delay(args)
+        if parsed is None:
+            return "Usage: `:tide /remind 2h check the flaky test` (units: m, h, d, w)."
+        delay, text = parsed
+        if not MIN_DELAY <= delay <= MAX_DELAY:
+            return "Reminders can be set from 1 minute to 30 days ahead."
+        if t.installation is None:
+            return "Reminders need Tidebot to be installed as a GitHub App."
+        self.reminders.add(t.repo, t.number, t.installation, t.author, delay, text)
+        return f"OK @{t.author}, I'll remind you here in {describe(delay)}."
 
 
 def _tally(vote: dict, heading: str) -> str:

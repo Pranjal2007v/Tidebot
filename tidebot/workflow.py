@@ -27,6 +27,8 @@ class Target:
     number: int
     is_pr: bool
     author: str
+    # The App installation the command came through, when there is one.
+    installation: Optional[int] = None
 
 
 def _words(args: str) -> List[str]:
