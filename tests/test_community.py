@@ -127,3 +127,23 @@ def test_remind_checks_delay_and_installation():
     assert "30 days" in run(c, "remind", "0m", INSTALLED)
     assert "GitHub App" in run(c, "remind", "1h")
     assert c.reminders.pending() == []
+
+
+def test_stats_counts_commands_kudos_votes_and_reminders():
+    c = community()
+    for name in ("lgtm", "help", "lgtm", "ping", "stats"):
+        c.record("o/r", name)
+    c.record("o/other", "merge")
+    run(c, "kudos", "@bob")
+    run(c, "vote", "Ship it?")
+    run(c, "remind", "1h", INSTALLED)
+    assert run(c, "stats") == (
+        "**Tidebot in o/r:** 5 commands run.\n"
+        "Most used: `/lgtm` 2, `/help` 1, `/ping` 1, `/stats` 1.\n"
+        "Kudos given: 1. Open votes: 1. Reminders waiting: 1.")
+
+
+def test_stats_on_a_quiet_repo():
+    assert run(community(), "stats") == (
+        "**Tidebot in o/r:** 0 commands run.\n"
+        "Kudos given: 0. Open votes: 0. Reminders waiting: 0.")

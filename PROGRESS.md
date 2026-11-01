@@ -99,3 +99,30 @@ The spec is [README.md](README.md). Work follows its [Roadmap](README.md#roadmap
 | A | Pranjal2007v | pranjalgangwar910@gmail.com | `e1a2c9d8284ac658d7dfe929f82e01bec660bcf9` | feat: add /lgtm, /hold and /wip as labels with cancel |
 | B | ishitasharma2490 | ishitasharma2490@gmail.com | `4d1924d69dde666a5d16f9972aa64ed7b21c16f1` | feat: add /retitle, /lock, /milestone and /duplicate |
 | C | bitflicker64 | himnshuverma10152006@gmail.com | `ec2366b75527f44b08bf62cdbdeb2c183ab36dd6` | feat: add /approve and /merge gated on CI and approval |
+
+## Run 5 (2026-11-01)
+
+**Estimated complete:** 25%
+
+**Added**
+
+- `/ship` in `tidebot/workflow.py`: approves and merges in one step. It runs the same checks as `/merge` except the approval, and refuses before approving when anything else blocks, so a failed `/ship` leaves no approval behind.
+- `tidebot/community.py`, a `Community` class that holds the state store and runs the commands from [Community](README.md#community-about-10). `/ping` answers `pong`, `/joke` picks a programming joke, and `/kudos @someone for ...` thanks someone else and keeps a per-repo count.
+- `/size` and `tidebot/size.py`: labels a PR `size/XS` to `size/XL` by lines added plus removed (under 10, 30, 100 and 500, then XL) and swaps out an old size label. The buckets are shared so the automatic size label on PR open can use them. `/vote <question>` opens one yes/no vote per issue, `/vote yes` or `/vote no` casts or changes a ballot, `/vote` shows the count and `/vote close` ends it.
+- `/remind 2h ...` and `tidebot/reminders.py`: delays such as `30m`, `1h30m` or `2d`, from 1 minute to 30 days. Reminders are saved in `state.json` with their App installation id, and the receiver posts due ones every minute and once at startup. A post that fails with a 5xx or 429 is retried next round; any other failure drops the reminder. `Target` now carries the installation id.
+- `/stats`: the receiver counts every allowed command per repo, and `/stats` replies with the total, the five most used commands, kudos given, open votes and waiting reminders.
+
+**Next 5%**
+
+- Automatic behavior when a PR opens, from [Automatic behavior](README.md#automatic-behavior): a welcome comment with the command list, a size label when `size_labels` is on, and a title and description lint when `pr_lint` is on.
+- When an issue opens: the `triage` label when `triage_label` is on.
+- Assign an issue to whoever comments "I'd like to work on this" when it has no assignee.
+
+**Blockers:** none. Still not run against a live GitHub App; API calls are covered by mocked tests.
+
+| Commit | GitHub | Email | SHA | Message |
+|---|---|---|---|---|
+| A | Pranjal2007v | pranjalgangwar910@gmail.com | `d0701238402c2732c51334fa27a936d5fcafcadd` | feat: add /ship, /ping, /joke and /kudos |
+| B | ishitasharma2490 | ishitasharma2490@gmail.com | `90f1e74600e90d6c3067a96793ccac614a744a45` | feat: add /size labels and yes/no /vote per issue |
+| C | bitflicker64 | himnshuverma10152006@gmail.com | `49f603f493a6585727adbd5caf6d9409f0efdd88` | feat: add /remind with reminders saved in state.json |
+| D | Payal-Phougat | 226825128+Payal-Phougat@users.noreply.github.com | *(this commit, filled in next run)* | feat: add /stats with per-repo command counts |

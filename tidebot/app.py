@@ -139,6 +139,9 @@ def create_app(secret: str, store: StateStore,
 
         actions = route_comment(repo, author, comment.get("body"), permission, limiter,
                                 config, starred)
+        for action in actions:
+            if action.allowed:
+                community.record(repo, action.command.name)
         replied = False
         if gh is not None and actions and "number" in issue:
             target = Target(repo, issue["number"], "pull_request" in issue, author,

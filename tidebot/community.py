@@ -21,6 +21,9 @@ from .workflow import Target, _words
 
 KUDOS_KEY = "kudos"
 VOTES_KEY = "votes"
+STATS_KEY = "stats"
+# How many commands /stats names in its "most used" list.
+TOP_COMMANDS = 5
 _BALLOTS = {"yes": "yes", "y": "yes", "+1": "yes", "no": "no", "n": "no", "-1": "no"}
 
 JOKES = (
@@ -50,6 +53,7 @@ class Community:
             "size": self._size,
             "vote": self._vote,
             "remind": self._remind,
+            "stats": self._stats,
         }
 
     def handles(self, name: str) -> bool:
@@ -57,6 +61,14 @@ class Community:
 
     def run(self, gh: GitHubClient, target: Target, command: Command) -> Optional[str]:
         return self.handlers[command.name](gh, target, command.args)
+
+    def record(self, repo: str, name: str) -> None:
+        """Count one run of ``/name`` in ``repo`` for ``/stats``."""
+        stats = dict(self.store.get(STATS_KEY) or {})
+        counts = dict(stats.get(repo, {}))
+        counts[name] = counts.get(name, 0) + 1
+        stats[repo] = counts
+        self.store.set(STATS_KEY, stats)
 
     def _ping(self, gh: GitHubClient, t: Target, args: str) -> Optional[str]:
         return "pong"
@@ -151,6 +163,23 @@ class Community:
             return "Reminders need Tidebot to be installed as a GitHub App."
         self.reminders.add(t.repo, t.number, t.installation, t.author, delay, text)
         return f"OK @{t.author}, I'll remind you here in {describe(delay)}."
+
+    def _stats(self, gh: GitHubClient, t: Target, args: str) -> Optional[str]:
+        counts = (self.store.get(STATS_KEY) or {}).get(t.repo, {})
+        total = sum(counts.values())
+        word = "command" if total == 1 else "commands"
+        lines = [f"**Tidebot in {t.repo}:** {total} {word} run."]
+        # Ties go alphabetically so the list doesn't shuffle between calls.
+        top = sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))[:TOP_COMMANDS]
+        if top:
+            lines.append("Most used: " + ", ".join(f"`/{n}` {c}" for n, c in top) + ".")
+        kudos = sum((self.store.get(KUDOS_KEY) or {}).get(t.repo, {}).values())
+        votes = sum(1 for key in (self.store.get(VOTES_KEY) or {})
+                    if key.rsplit("#", 1)[0] == t.repo)
+        reminders = len(self.reminders.pending(t.repo))
+        lines.append(f"Kudos given: {kudos}. Open votes: {votes}. "
+                     f"Reminders waiting: {reminders}.")
+        return "\n".join(lines)
 
 
 def _tally(vote: dict, heading: str) -> str:

@@ -181,3 +181,13 @@ def test_remind_is_saved_and_posted_on_startup_once_due():
     assert gh.calls[-1] == ("post_comment", "o/r", 3,
                             "@alice, you asked me to remind you: rerun CI")
     assert store.get("reminders") == []
+
+
+def test_stats_counts_only_allowed_commands():
+    store = StateStore(None)
+    gh = FakeGitHub(permission=None)
+    c = TestClient(create_app(SECRET, store, github=lambda installation: gh))
+    post(c, "issue_comment", issue_payload(":tide /ping\n:tide /merge"))
+    post(c, "issue_comment", issue_payload(":tide /stats"))
+    assert store.get("stats") == {"o/r": {"ping": 1, "stats": 1}}
+    assert "2 commands run" in gh.calls[-1][3]
