@@ -64,7 +64,7 @@ def test_cc_on_issue_mentions():
 
 
 def test_commands_without_handler_do_nothing():
-    assert run(ISSUE, "vote") == ([], None)
+    assert run(ISSUE, "ask") == ([], None)
 
 
 def test_lgtm_labels_pr():
