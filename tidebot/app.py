@@ -19,6 +19,7 @@ from typing import Callable, Optional
 
 from fastapi import FastAPI, HTTPException, Request
 
+from .community import Community
 from .config import CONFIG_PATH, TideConfig, parse_config
 from .github import AppAuth, GitHubClient, GitHubError
 from .help import help_text
@@ -47,13 +48,15 @@ def permission_from_association(repo: str, comment: dict) -> Optional[str]:
 
 
 def _reply_for(gh: GitHubClient, target: Target, action: Action,
-               permission: Optional[str]) -> Optional[str]:
+               permission: Optional[str], community: Community) -> Optional[str]:
     name = action.command.name
     if not action.allowed:
         return f"`/{name}`: {action.reason}"
     if name == "help":
         return help_text(target.author, permission)
     try:
+        if community.handles(name):
+            return community.run(gh, target, action.command)
         return run_command(gh, target, action.command)
     except GitHubError as err:
         return f"`/{name}` failed: GitHub answered {err.status}"
@@ -64,6 +67,7 @@ def create_app(secret: str, store: StateStore,
                github: Optional[ClientFactory] = None) -> FastAPI:
     app = FastAPI(title="Tidebot")
     limiter = RateLimiter(store)
+    community = Community(store)
 
     @app.get("/healthz")
     def healthz():
@@ -107,7 +111,8 @@ def create_app(secret: str, store: StateStore,
         replied = False
         if gh is not None and actions and "number" in issue:
             target = Target(repo, issue["number"], "pull_request" in issue, author)
-            replies = [r for r in (_reply_for(gh, target, a, permission) for a in actions) if r]
+            replies = [r for r in (_reply_for(gh, target, a, permission, community)
+                                       for a in actions) if r]
             if replies:
                 gh.post_comment(repo, target.number, "\n\n".join(replies))
                 replied = True

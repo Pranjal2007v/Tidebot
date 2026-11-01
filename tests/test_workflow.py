@@ -205,3 +205,23 @@ def test_merge_needs_ci_results():
 def test_merge_rejects_unknown_method_and_issues():
     assert "Usage" in merge(MergeGitHub(), "yolo")
     assert "pull requests" in run(ISSUE, "merge")[1]
+
+
+def test_ship_approves_then_merges_without_prior_approval():
+    gh = MergeGitHub(reviews={})
+    assert run_command(gh, PR, Command("ship", "squash")) is None
+    assert gh.calls == [("approve", "o/r", 6, "Approved by @alice with `/ship`."),
+                        ("merge", "o/r", 6, "abc", "squash")]
+
+
+def test_ship_refuses_before_approving():
+    gh = MergeGitHub(reviews={"carol": "CHANGES_REQUESTED"}, ci="failure")
+    reply = run_command(gh, PR, Command("ship"))
+    assert gh.calls == []
+    assert reply.startswith("Not shipping:")
+    assert "requested changes" in reply and "CI is failing" in reply
+
+
+def test_ship_rejects_unknown_method_and_issues():
+    assert "Usage" in run_command(MergeGitHub(), PR, Command("ship", "yolo"))
+    assert "pull requests" in run(ISSUE, "ship")[1]

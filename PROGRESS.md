@@ -98,4 +98,4 @@ The spec is [README.md](README.md). Work follows its [Roadmap](README.md#roadmap
 |---|---|---|---|---|
 | A | Pranjal2007v | pranjalgangwar910@gmail.com | `e1a2c9d8284ac658d7dfe929f82e01bec660bcf9` | feat: add /lgtm, /hold and /wip as labels with cancel |
 | B | ishitasharma2490 | ishitasharma2490@gmail.com | `4d1924d69dde666a5d16f9972aa64ed7b21c16f1` | feat: add /retitle, /lock, /milestone and /duplicate |
-| C | bitflicker64 | himnshuverma10152006@gmail.com | *(this commit, filled in next run)* | feat: add /approve and /merge gated on CI and approval |
+| C | bitflicker64 | himnshuverma10152006@gmail.com | `ec2366b75527f44b08bf62cdbdeb2c183ab36dd6` | feat: add /approve and /merge gated on CI and approval |

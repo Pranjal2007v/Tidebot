@@ -155,3 +155,10 @@ def test_github_errors_become_replies():
     c, _ = acting_client(gh)
     post(c, "issue_comment", issue_payload(":tide /close"))
     assert gh.calls == [("post_comment", "o/r", 3, "`/close` failed: GitHub answered 403")]
+
+
+def test_community_commands_reply():
+    gh = FakeGitHub()
+    c, _ = acting_client(gh)
+    post(c, "issue_comment", issue_payload(":tide /ping"))
+    assert gh.calls == [("post_comment", "o/r", 3, "pong")]

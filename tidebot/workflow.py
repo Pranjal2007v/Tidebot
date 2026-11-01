@@ -162,6 +162,7 @@ def _approve(gh: GitHubClient, t: Target, args: str) -> Optional[str]:
 
 
 _MERGE_METHODS = {"merge", "squash", "rebase"}
+NO_APPROVAL = "it has no approval"
 
 
 def merge_blockers(gh: GitHubClient, t: Target, pr: dict) -> List[str]:
@@ -180,7 +181,7 @@ def merge_blockers(gh: GitHubClient, t: Target, pr: dict) -> List[str]:
     if "CHANGES_REQUESTED" in reviews:
         blockers.append("a reviewer requested changes")
     elif "APPROVED" not in reviews:
-        blockers.append("it has no approval")
+        blockers.append(NO_APPROVAL)
     ci = gh.ci_state(t.repo, pr["head"]["sha"])
     if ci != "success":
         blockers.append({"none": "no CI has reported on it",
@@ -189,17 +190,43 @@ def merge_blockers(gh: GitHubClient, t: Target, pr: dict) -> List[str]:
     return blockers
 
 
+def _merge_method(args: str) -> Optional[str]:
+    words = [w.lower() for w in _words(args)]
+    method = words[0] if words else "merge"
+    return method if method in _MERGE_METHODS else None
+
+
 def _merge(gh: GitHubClient, t: Target, args: str) -> Optional[str]:
     if not t.is_pr:
         return "`/merge` only works on pull requests."
-    words = [w.lower() for w in _words(args)]
-    method = words[0] if words else "merge"
-    if method not in _MERGE_METHODS:
+    method = _merge_method(args)
+    if method is None:
         return "Usage: `:tide /merge`, `/merge squash` or `/merge rebase`."
     pr = gh.pull(t.repo, t.number)
     blockers = merge_blockers(gh, t, pr)
     if blockers:
         return "Not merging: " + "; ".join(blockers) + "."
+    gh.merge(t.repo, t.number, pr["head"]["sha"], method)
+    return None
+
+
+def _ship(gh: GitHubClient, t: Target, args: str) -> Optional[str]:
+    """Approve and merge in one step.
+
+    The approval is the only check ``/ship`` stands in for. Anything else
+    that blocks a merge stops it before the approval is posted, so a refused
+    ``/ship`` leaves no stray approval behind.
+    """
+    if not t.is_pr:
+        return "`/ship` only works on pull requests."
+    method = _merge_method(args)
+    if method is None:
+        return "Usage: `:tide /ship`, `/ship squash` or `/ship rebase`."
+    pr = gh.pull(t.repo, t.number)
+    blockers = [b for b in merge_blockers(gh, t, pr) if b != NO_APPROVAL]
+    if blockers:
+        return "Not shipping: " + "; ".join(blockers) + "."
+    gh.approve(t.repo, t.number, f"Approved by @{t.author} with `/ship`.")
     gh.merge(t.repo, t.number, pr["head"]["sha"], method)
     return None
 
@@ -219,6 +246,7 @@ HANDLERS: Dict[str, Handler] = {
     "wip": _toggle_label(WIP_LABEL),
     "approve": _approve,
     "merge": _merge,
+    "ship": _ship,
 }
 
 
