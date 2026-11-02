@@ -224,3 +224,31 @@ def test_push_to_pr_relabels_size():
                          "deletions": 0, "labels": []},
     })
     assert gh.calls == [("add_labels", "o/r", 8, ["size/S"])]
+
+
+def test_new_issue_gets_triage_label():
+    class Labels(FakeGitHub):
+        def add_labels(self, repo, number, labels):
+            self.calls.append(("add_labels", repo, number, list(labels)))
+
+    gh = Labels()
+    c, _ = acting_client(gh)
+    res = post(c, "issues", {
+        "action": "opened", "repository": {"full_name": "o/r"}, "installation": {"id": 99},
+        "issue": {"number": 5},
+    })
+    assert res.json()["handled"] == "issues"
+    assert gh.calls == [("add_labels", "o/r", 5, ["triage"])]
+
+
+def test_comment_claiming_an_issue_assigns_it():
+    class Assigns(FakeGitHub):
+        def add_assignees(self, repo, number, logins):
+            self.calls.append(("add_assignees", repo, number, list(logins)))
+
+    gh = Assigns()
+    c, _ = acting_client(gh)
+    res = post(c, "issue_comment", issue_payload("Hi, I'd like to work on this!", login="bob"))
+    assert res.json()["replied"] is True
+    assert gh.calls[0] == ("add_assignees", "o/r", 3, ["bob"])
+    assert gh.calls[1][3].startswith("Thanks @bob")

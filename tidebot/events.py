@@ -7,14 +7,24 @@ tiers. See the README's Automatic behavior section for what each one does.
 
 from __future__ import annotations
 
-from typing import List
+import re
+from typing import List, Optional
 
 from .config import TideConfig
-from .github import GitHubClient
+from .github import GitHubClient, GitHubError
 from .help import welcome_text
 from .lint import lint_comment, lint_pull_request
 from .router import is_bot
 from .size import changed_lines, size_label, stale_labels
+
+TRIAGE_LABEL = "triage"
+# Ways people ask for an issue: "I'd like to work on this", "can I take
+# this?", "please assign this to me".
+_CLAIM = re.compile(
+    r"\b(?:i'?d like to|i would like to|i want to|can i|could i|may i|i'?ll|i will|i can)"
+    r"\s+(?:work on|take|pick up|handle)\s+(?:this|it)\b"
+    r"|\bassign\s+(?:this|it)\s+to\s+me\b",
+    re.I)
 
 
 def pull_request_opened(gh: GitHubClient, repo: str, pr: dict, config: TideConfig) -> None:
@@ -50,3 +60,42 @@ def label_size(gh: GitHubClient, repo: str, pr: dict) -> None:
         gh.remove_label(repo, pr["number"], old)
     if wanted not in current:
         gh.add_labels(repo, pr["number"], [wanted])
+
+
+def issue_opened(gh: GitHubClient, repo: str, issue: dict, config: TideConfig) -> None:
+    """Mark a new issue for triage until a maintainer looks at it."""
+    if config.triage_label:
+        gh.add_labels(repo, issue["number"], [TRIAGE_LABEL])
+
+
+def claims_issue(body: Optional[str]) -> bool:
+    """Whether a comment asks to work on the issue, ignoring quotes and code."""
+    in_fence = False
+    for raw in (body or "").replace("\u2019", "'").splitlines():
+        line = raw.strip()
+        if line.startswith(("```", "~~~")):
+            in_fence = not in_fence
+            continue
+        if not in_fence and not line.startswith(">") and _CLAIM.search(line):
+            return True
+    return False
+
+
+def claim_issue(gh: GitHubClient, repo: str, issue: dict, author: str,
+                body: Optional[str]) -> Optional[str]:
+    """Assign an unassigned issue to whoever asked for it; return the reply.
+
+    Only plain issues count: a PR already has its author, and an issue with
+    an assignee is taken. When GitHub refuses the assignment the comment is
+    left for a maintainer to answer.
+    """
+    if "pull_request" in issue or issue.get("assignees") or is_bot(author):
+        return None
+    if not claims_issue(body):
+        return None
+    try:
+        gh.add_assignees(repo, issue["number"], [author])
+    except GitHubError as err:
+        print(f"tidebot: assigning {repo}#{issue['number']} to {author} failed: {err}")
+        return None
+    return f"Thanks @{author}, this issue is yours now. Comment here if you get stuck."

@@ -126,3 +126,29 @@ The spec is [README.md](README.md). Work follows its [Roadmap](README.md#roadmap
 | B | ishitasharma2490 | ishitasharma2490@gmail.com | `90f1e74600e90d6c3067a96793ccac614a744a45` | feat: add /size labels and yes/no /vote per issue |
 | C | bitflicker64 | himnshuverma10152006@gmail.com | `49f603f493a6585727adbd5caf6d9409f0efdd88` | feat: add /remind with reminders saved in state.json |
 | D | Payal-Phougat | 226825128+Payal-Phougat@users.noreply.github.com | `5d6cc3e67b43da8e878b5b5ea2651af4f6bb4da6` | feat: add /stats with per-repo command counts |
+
+## Run 6 (2026-11-02)
+
+**Estimated complete:** 30%
+
+**Added**
+
+- `tidebot/events.py` and the receiver now answer `pull_request` and `issues` webhooks, not only comments. When a PR opens, Tidebot posts a welcome comment that lists every command by group and points to `/help` for the ones the author can run. PRs opened by bots get no welcome.
+- Size labels on PRs when `size_labels` is on: `size/XS` to `size/XL` on open, using the same buckets as `/size`, and relabeled on each new push (`synchronize`). The line counts and current labels come from the webhook payload, so this costs no extra API reads.
+- `tidebot/lint.py`, used when `pr_lint` is on: flags an empty, short (under 10 characters) or long (over 72) title, a WIP title (suggests a draft or `/wip`), titles GitHub fills in such as "Update README.md" or "Patch-1", and a description under 20 characters once template comments are removed. The notes go into the welcome comment and never block a merge.
+- When an issue opens, Tidebot adds the `triage` label when `triage_label` is on. A comment such as "I'd like to work on this", "can I take this?" or "assign it to me" on an issue with no assignee assigns it to the commenter and replies. Quoted lines and code blocks don't count. This follows [Automatic behavior](README.md#automatic-behavior), which lets anyone claim an issue, rather than the collaborator tier that `/assign` needs. If GitHub refuses the assignment, Tidebot stays quiet and a maintainer can answer.
+
+**Next 5%**
+
+- Assign reviewers by code area when a PR opens: read a code-area map (a `reviewers` section in `.tide.yml`, or CODEOWNERS), match it against the changed files and request reviews, skipping the author.
+- Label new issues by content when `auto_label` is on: keyword rules for `bug`, `enhancement`, `docs` and `question`, using only labels the repo already has.
+- Duplicate detection, step one: a TF-IDF similarity score between a new issue and the repo's open issues, with a reply linking close matches. The AI check on borderline matches comes with the AI work.
+
+**Blockers:** none. Still not run against a live GitHub App; API calls are covered by mocked tests.
+
+| Commit | GitHub | Email | SHA | Message |
+|---|---|---|---|---|
+| A | ishitasharma2490 | ishitasharma2490@gmail.com | `fdaf3f36601cc29e7d51704c3b33c04b41c005ea` | feat: welcome new pull requests with the command list |
+| B | bitflicker64 | himnshuverma10152006@gmail.com | `c7df0754b3122a5595b63c72bbc20fb4ca30095c` | feat: label PR size on open and relabel it on new pushes |
+| C | Payal-Phougat | 226825128+Payal-Phougat@users.noreply.github.com | `0463b1c763f351768315a280ebdc2d0b950cdbd3` | feat: lint PR titles and descriptions in the welcome comment |
+| D | Pranjal2007v | pranjalgangwar910@gmail.com | *(this commit, filled in next run)* | feat: triage new issues and assign them to whoever asks |

@@ -6,7 +6,8 @@ also acts: it looks up the author's real permission and the repo's
 ``.tide.yml``, runs the commands it knows, posts one reply with ``/help``
 output and the reason for any denied command, posts ``/remind``
 reminders once they are due, and handles new pull requests as the README's
-Automatic behavior section describes.
+Automatic behavior section describes: new PRs and issues, and comments
+asking to work on an issue.
 
 Run it with ``uvicorn tidebot.app:app`` and ``TIDEBOT_WEBHOOK_SECRET`` set.
 Set ``TIDEBOT_APP_ID`` and ``TIDEBOT_PRIVATE_KEY`` (the path to the App's
@@ -25,7 +26,7 @@ from fastapi import FastAPI, HTTPException, Request
 
 from .community import Community
 from .config import CONFIG_PATH, TideConfig, parse_config
-from .events import pull_request_opened, pull_request_pushed
+from .events import claim_issue, issue_opened, pull_request_opened, pull_request_pushed
 from .github import AppAuth, GitHubClient, GitHubError
 from .help import help_text
 from .permissions import Tier, tier_for
@@ -48,10 +49,12 @@ PermissionLookup = Callable[[str, dict], Optional[str]]
 ClientFactory = Callable[[int], GitHubClient]
 # How often to look for reminders that are due, in seconds.
 REMINDER_INTERVAL = 60
-# ``pull_request`` webhook actions Tidebot answers, and what it does.
-_PR_HANDLERS = {
-    "opened": pull_request_opened,
-    "synchronize": pull_request_pushed,
+# (event, action) pairs Tidebot answers automatically, with the payload key
+# holding the PR or issue and the handler to run.
+_EVENT_HANDLERS = {
+    ("pull_request", "opened"): ("pull_request", pull_request_opened),
+    ("pull_request", "synchronize"): ("pull_request", pull_request_pushed),
+    ("issues", "opened"): ("issue", issue_opened),
 }
 
 
@@ -129,16 +132,17 @@ def create_app(secret: str, store: StateStore,
         installation = payload.get("installation", {}).get("id")
         gh = github(installation) if github and installation else None
 
-        if event == "pull_request" and gh is not None:
-            pr = payload.get("pull_request", {})
-            handler = _PR_HANDLERS.get(payload.get("action", ""))
-            if handler and "number" in pr:
+        handled = _EVENT_HANDLERS.get((event, payload.get("action", "")))
+        if handled and gh is not None:
+            key, handler = handled
+            item = payload.get(key, {})
+            if "number" in item:
                 config = parse_config(gh.fetch_file(repo, CONFIG_PATH))
                 try:
-                    handler(gh, repo, pr, config)
+                    handler(gh, repo, item, config)
                 except GitHubError as err:
-                    print(f"tidebot: handling PR {repo}#{pr['number']} failed: {err}")
-                return {"ok": True, "handled": "pull_request", "actions": []}
+                    print(f"tidebot: handling {event} {repo}#{item['number']} failed: {err}")
+                return {"ok": True, "handled": event, "actions": []}
         if event != "issue_comment" or payload.get("action") != "created":
             return {"ok": True, "ignored": event, "actions": []}
 
@@ -162,11 +166,14 @@ def create_app(secret: str, store: StateStore,
             if action.allowed:
                 community.record(repo, action.command.name)
         replied = False
-        if gh is not None and actions and "number" in issue:
+        if gh is not None and "number" in issue:
             target = Target(repo, issue["number"], "pull_request" in issue, author,
                             installation)
             replies = [r for r in (_reply_for(gh, target, a, permission, community)
                                        for a in actions) if r]
+            claimed = claim_issue(gh, repo, issue, author, comment.get("body"))
+            if claimed:
+                replies.append(claimed)
             if replies:
                 gh.post_comment(repo, target.number, "\n\n".join(replies))
                 replied = True

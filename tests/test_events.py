@@ -1,5 +1,7 @@
 from tidebot.config import TideConfig
-from tidebot.events import label_size, pull_request_opened, pull_request_pushed
+from tidebot.events import (claim_issue, claims_issue, issue_opened, label_size,
+                            pull_request_opened, pull_request_pushed)
+from tidebot.github import GitHubError
 
 
 class FakeGitHub:
@@ -14,6 +16,9 @@ class FakeGitHub:
 
     def remove_label(self, repo, number, label):
         self.calls.append(("remove_label", repo, number, label))
+
+    def add_assignees(self, repo, number, logins):
+        self.calls.append(("add_assignees", repo, number, list(logins)))
 
 
 def pr(**fields):
@@ -84,3 +89,54 @@ def test_pr_lint_off_in_config():
     pull_request_opened(gh, "o/r", pr(title="Fix", body=""),
                         TideConfig(size_labels=False, pr_lint=False))
     assert "help reviewers" not in gh.calls[0][3]
+
+
+def test_new_issue_gets_triage_label():
+    gh = FakeGitHub()
+    issue_opened(gh, "o/r", {"number": 4}, TideConfig())
+    assert gh.calls == [("add_labels", "o/r", 4, ["triage"])]
+
+
+def test_triage_label_off_in_config():
+    gh = FakeGitHub()
+    issue_opened(gh, "o/r", {"number": 4}, TideConfig(triage_label=False))
+    assert gh.calls == []
+
+
+def test_claim_phrases():
+    assert claims_issue("Hi! I'd like to work on this.")
+    assert claims_issue("I\u2019d like to work on this one")
+    assert claims_issue("Can I take this?")
+    assert claims_issue("please assign it to me")
+    assert claims_issue("I would like to work on this issue")
+
+
+def test_not_claims():
+    assert not claims_issue("This breaks when I work on the config")
+    assert not claims_issue("> I'd like to work on this\nAre they still on it?")
+    assert not claims_issue("```\nI'll take this\n```")
+    assert not claims_issue(None)
+
+
+def test_claim_assigns_and_replies():
+    gh = FakeGitHub()
+    reply = claim_issue(gh, "o/r", {"number": 4, "assignees": []}, "bob", "Can I work on this?")
+    assert gh.calls == [("add_assignees", "o/r", 4, ["bob"])]
+    assert reply.startswith("Thanks @bob, this issue is yours")
+
+
+def test_claim_skips_taken_issues_prs_and_bots():
+    gh = FakeGitHub()
+    body = "I'd like to work on this"
+    assert claim_issue(gh, "o/r", {"number": 4, "assignees": [{"login": "x"}]}, "bob", body) is None
+    assert claim_issue(gh, "o/r", {"number": 4, "pull_request": {}}, "bob", body) is None
+    assert claim_issue(gh, "o/r", {"number": 4}, "helper[bot]", body) is None
+    assert gh.calls == []
+
+
+def test_refused_assignment_stays_quiet():
+    class Refusing(FakeGitHub):
+        def add_assignees(self, repo, number, logins):
+            raise GitHubError(422, "cannot be assigned")
+
+    assert claim_issue(Refusing(), "o/r", {"number": 4}, "bob", "can I take this?") is None
