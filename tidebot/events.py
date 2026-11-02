@@ -12,18 +12,23 @@ from typing import List
 from .config import TideConfig
 from .github import GitHubClient
 from .help import welcome_text
+from .lint import lint_comment, lint_pull_request
 from .router import is_bot
 from .size import changed_lines, size_label, stale_labels
 
 
 def pull_request_opened(gh: GitHubClient, repo: str, pr: dict, config: TideConfig) -> None:
-    """Welcome the author of a new PR with the command list and label its size."""
+    """Welcome the author of a new PR, label its size and lint it, per the config."""
     if config.size_labels:
         label_size(gh, repo, pr)
     author = (pr.get("user") or {}).get("login", "")
     if is_bot(author):
         return
     parts: List[str] = [welcome_text(author)]
+    if config.pr_lint:
+        notes = lint_comment(lint_pull_request(pr))
+        if notes:
+            parts.append(notes)
     gh.post_comment(repo, pr["number"], "\n\n".join(parts))
 
 

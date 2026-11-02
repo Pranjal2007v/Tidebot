@@ -63,3 +63,24 @@ def test_right_label_already_there_does_nothing():
     gh = FakeGitHub()
     label_size(gh, "o/r", pr(additions=2, labels=[{"name": "size/XS"}]))
     assert gh.calls == []
+
+
+def test_lint_notes_join_the_welcome():
+    gh = FakeGitHub()
+    pull_request_opened(gh, "o/r", pr(title="Update app.py", body=""), TideConfig(size_labels=False))
+    (_, _, _, body), = gh.calls
+    assert body.startswith("Thanks for the pull request")
+    assert "GitHub suggested" in body and "Add a description" in body
+
+
+def test_clean_pr_gets_no_lint_notes():
+    gh = FakeGitHub()
+    pull_request_opened(gh, "o/r", pr(), TideConfig(size_labels=False))
+    assert "help reviewers" not in gh.calls[0][3]
+
+
+def test_pr_lint_off_in_config():
+    gh = FakeGitHub()
+    pull_request_opened(gh, "o/r", pr(title="Fix", body=""),
+                        TideConfig(size_labels=False, pr_lint=False))
+    assert "help reviewers" not in gh.calls[0][3]
