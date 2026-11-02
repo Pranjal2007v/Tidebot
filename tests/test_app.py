@@ -209,3 +209,18 @@ def test_new_pr_is_welcomed():
 def test_pr_events_without_credentials_are_ignored():
     res = post(client(), "pull_request", {"action": "opened", "pull_request": {"number": 1}})
     assert res.json()["ignored"] == "pull_request"
+
+
+def test_push_to_pr_relabels_size():
+    class Labels(FakeGitHub):
+        def add_labels(self, repo, number, labels):
+            self.calls.append(("add_labels", repo, number, list(labels)))
+
+    gh = Labels()
+    c, _ = acting_client(gh)
+    post(c, "pull_request", {
+        "action": "synchronize", "repository": {"full_name": "o/r"}, "installation": {"id": 99},
+        "pull_request": {"number": 8, "user": {"login": "alice"}, "additions": 12,
+                         "deletions": 0, "labels": []},
+    })
+    assert gh.calls == [("add_labels", "o/r", 8, ["size/S"])]

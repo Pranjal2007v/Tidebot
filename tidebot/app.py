@@ -25,7 +25,7 @@ from fastapi import FastAPI, HTTPException, Request
 
 from .community import Community
 from .config import CONFIG_PATH, TideConfig, parse_config
-from .events import pull_request_opened
+from .events import pull_request_opened, pull_request_pushed
 from .github import AppAuth, GitHubClient, GitHubError
 from .help import help_text
 from .permissions import Tier, tier_for
@@ -48,6 +48,11 @@ PermissionLookup = Callable[[str, dict], Optional[str]]
 ClientFactory = Callable[[int], GitHubClient]
 # How often to look for reminders that are due, in seconds.
 REMINDER_INTERVAL = 60
+# ``pull_request`` webhook actions Tidebot answers, and what it does.
+_PR_HANDLERS = {
+    "opened": pull_request_opened,
+    "synchronize": pull_request_pushed,
+}
 
 
 def permission_from_association(repo: str, comment: dict) -> Optional[str]:
@@ -126,12 +131,13 @@ def create_app(secret: str, store: StateStore,
 
         if event == "pull_request" and gh is not None:
             pr = payload.get("pull_request", {})
-            if payload.get("action") == "opened" and "number" in pr:
+            handler = _PR_HANDLERS.get(payload.get("action", ""))
+            if handler and "number" in pr:
                 config = parse_config(gh.fetch_file(repo, CONFIG_PATH))
                 try:
-                    pull_request_opened(gh, repo, pr, config)
+                    handler(gh, repo, pr, config)
                 except GitHubError as err:
-                    print(f"tidebot: handling new PR {repo}#{pr['number']} failed: {err}")
+                    print(f"tidebot: handling PR {repo}#{pr['number']} failed: {err}")
                 return {"ok": True, "handled": "pull_request", "actions": []}
         if event != "issue_comment" or payload.get("action") != "created":
             return {"ok": True, "ignored": event, "actions": []}
