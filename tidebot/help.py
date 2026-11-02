@@ -29,3 +29,13 @@ def help_text(author: str, permission: Optional[str]) -> str:
     if tier < Tier.MAINTAINER:
         lines += ["", "Other commands need more access to the repo."]
     return "\n".join(lines)
+
+
+def welcome_text(author: str) -> str:
+    """The comment posted on a new PR: thanks, then every command by group."""
+    lines = [f"Thanks for the pull request, @{author}! I'm Tidebot. Maintainers and "
+             f"contributors can run these commands here by starting a line with `{TRIGGER}`:", ""]
+    for title, names in _GROUPS:
+        lines.append(f"**{title}:** " + ", ".join(f"`/{n}`" for n in sorted(names)))
+    lines += ["", f"`{TRIGGER} /help` shows the ones you have access to."]
+    return "\n".join(lines)

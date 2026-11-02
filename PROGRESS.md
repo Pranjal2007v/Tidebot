@@ -125,4 +125,4 @@ The spec is [README.md](README.md). Work follows its [Roadmap](README.md#roadmap
 | A | Pranjal2007v | pranjalgangwar910@gmail.com | `d0701238402c2732c51334fa27a936d5fcafcadd` | feat: add /ship, /ping, /joke and /kudos |
 | B | ishitasharma2490 | ishitasharma2490@gmail.com | `90f1e74600e90d6c3067a96793ccac614a744a45` | feat: add /size labels and yes/no /vote per issue |
 | C | bitflicker64 | himnshuverma10152006@gmail.com | `49f603f493a6585727adbd5caf6d9409f0efdd88` | feat: add /remind with reminders saved in state.json |
-| D | Payal-Phougat | 226825128+Payal-Phougat@users.noreply.github.com | *(this commit, filled in next run)* | feat: add /stats with per-repo command counts |
+| D | Payal-Phougat | 226825128+Payal-Phougat@users.noreply.github.com | `5d6cc3e67b43da8e878b5b5ea2651af4f6bb4da6` | feat: add /stats with per-repo command counts |

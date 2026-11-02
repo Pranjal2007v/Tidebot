@@ -4,8 +4,9 @@ It verifies the delivery signature, routes new issue and PR comments, and
 returns the routing result as JSON. When it has GitHub App credentials it
 also acts: it looks up the author's real permission and the repo's
 ``.tide.yml``, runs the commands it knows, posts one reply with ``/help``
-output and the reason for any denied command, and posts ``/remind``
-reminders once they are due.
+output and the reason for any denied command, posts ``/remind``
+reminders once they are due, and handles new pull requests as the README's
+Automatic behavior section describes.
 
 Run it with ``uvicorn tidebot.app:app`` and ``TIDEBOT_WEBHOOK_SECRET`` set.
 Set ``TIDEBOT_APP_ID`` and ``TIDEBOT_PRIVATE_KEY`` (the path to the App's
@@ -24,6 +25,7 @@ from fastapi import FastAPI, HTTPException, Request
 
 from .community import Community
 from .config import CONFIG_PATH, TideConfig, parse_config
+from .events import pull_request_opened
 from .github import AppAuth, GitHubClient, GitHubError
 from .help import help_text
 from .permissions import Tier, tier_for
@@ -117,15 +119,26 @@ def create_app(secret: str, store: StateStore,
 
         if event == "ping":
             return {"ok": True, "actions": []}
+
+        repo = payload.get("repository", {}).get("full_name", "")
+        installation = payload.get("installation", {}).get("id")
+        gh = github(installation) if github and installation else None
+
+        if event == "pull_request" and gh is not None:
+            pr = payload.get("pull_request", {})
+            if payload.get("action") == "opened" and "number" in pr:
+                config = parse_config(gh.fetch_file(repo, CONFIG_PATH))
+                try:
+                    pull_request_opened(gh, repo, pr, config)
+                except GitHubError as err:
+                    print(f"tidebot: handling new PR {repo}#{pr['number']} failed: {err}")
+                return {"ok": True, "handled": "pull_request", "actions": []}
         if event != "issue_comment" or payload.get("action") != "created":
             return {"ok": True, "ignored": event, "actions": []}
 
-        repo = payload.get("repository", {}).get("full_name", "")
         comment = payload.get("comment", {})
         issue = payload.get("issue", {})
         author = comment.get("user", {}).get("login", "")
-        installation = payload.get("installation", {}).get("id")
-        gh = github(installation) if github and installation else None
 
         config, starred = TideConfig(), False
         if gh is None:

@@ -20,3 +20,11 @@ def test_maintainer_sees_everything():
     text = help_text("carol", "admin")
     assert "`/merge`" in text and "`/label`" in text
     assert "need more access" not in text
+
+
+def test_welcome_lists_every_group():
+    from tidebot.help import welcome_text
+    text = welcome_text("dave")
+    assert text.startswith("Thanks for the pull request, @dave!")
+    assert "**AI:**" in text and "**Workflow:**" in text and "**Community:**" in text
+    assert "`/merge`" in text and "`/ask`" in text and "`:tide /help`" in text

@@ -191,3 +191,21 @@ def test_stats_counts_only_allowed_commands():
     post(c, "issue_comment", issue_payload(":tide /stats"))
     assert store.get("stats") == {"o/r": {"ping": 1, "stats": 1}}
     assert "2 commands run" in gh.calls[-1][3]
+
+
+def test_new_pr_is_welcomed():
+    gh = FakeGitHub(config="size_labels: false\npr_lint: false\n")
+    c, installs = acting_client(gh)
+    res = post(c, "pull_request", {
+        "action": "opened", "repository": {"full_name": "o/r"}, "installation": {"id": 99},
+        "pull_request": {"number": 8, "user": {"login": "alice"}},
+    })
+    assert res.json()["handled"] == "pull_request"
+    assert installs == [99]
+    (call,) = gh.calls
+    assert call[:3] == ("post_comment", "o/r", 8) and "@alice" in call[3]
+
+
+def test_pr_events_without_credentials_are_ignored():
+    res = post(client(), "pull_request", {"action": "opened", "pull_request": {"number": 1}})
+    assert res.json()["ignored"] == "pull_request"
