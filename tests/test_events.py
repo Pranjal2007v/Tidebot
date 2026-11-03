@@ -7,8 +7,9 @@ from tidebot.github import GitHubError
 
 
 class FakeGitHub:
-    def __init__(self, files=None, changed=()):
+    def __init__(self, files=None, changed=(), issues=()):
         self.calls = []
+        self.issues = list(issues)
         self.files = files or {}
         self.changed = list(changed)
 
@@ -20,6 +21,10 @@ class FakeGitHub:
 
     def request_reviewers(self, repo, number, logins, teams=()):
         self.calls.append(("request_reviewers", repo, number, list(logins), list(teams)))
+
+    def open_issues(self, repo):
+        self.calls.append(("open_issues", repo))
+        return self.issues
 
     def repo_labels(self, repo):
         self.calls.append(("repo_labels", repo))
@@ -210,7 +215,7 @@ def test_refused_review_request_still_welcomes():
 def test_new_issue_is_labeled_by_content():
     gh = FakeGitHub()
     issue_opened(gh, "o/r", {"number": 4, "title": "Crash in the docs build", "body": ""},
-                 TideConfig())
+                 TideConfig(duplicate_check=False))
     assert gh.calls == [("repo_labels", "o/r"),
                         ("add_labels", "o/r", 4, ["triage", "bug", "documentation"])]
 
@@ -218,12 +223,39 @@ def test_new_issue_is_labeled_by_content():
 def test_content_labels_skip_labels_already_set():
     gh = FakeGitHub()
     issue = {"number": 4, "title": "Crash on save", "labels": [{"name": "Bug"}]}
-    issue_opened(gh, "o/r", issue, TideConfig(triage_label=False))
+    issue_opened(gh, "o/r", issue, TideConfig(triage_label=False, duplicate_check=False))
     assert gh.calls == [("repo_labels", "o/r")]
 
 
 def test_auto_label_off_in_config():
     gh = FakeGitHub()
     issue_opened(gh, "o/r", {"number": 4, "title": "Crash on save"},
-                 TideConfig(auto_label=False))
+                 TideConfig(auto_label=False, duplicate_check=False))
     assert gh.calls == [("add_labels", "o/r", 4, ["triage"])]
+
+
+def test_new_issue_links_likely_duplicates():
+    gh = FakeGitHub(issues=[{"number": 2, "title": "Reminders posted twice after restart"},
+                            {"number": 3, "title": "Add dark mode"}])
+    issue_opened(gh, "o/r", {"number": 4, "title": "Reminder posted twice after a restart"},
+                 TideConfig(triage_label=False, auto_label=False))
+    assert gh.calls[0] == ("open_issues", "o/r")
+    (_, _, number, body), = gh.calls[1:]
+    assert number == 4 and "#2 Reminders posted twice" in body and "#3" not in body
+
+
+def test_no_duplicates_no_reply():
+    gh = FakeGitHub(issues=[{"number": 3, "title": "Add dark mode"}])
+    issue_opened(gh, "o/r", {"number": 4, "title": "Reminders posted twice"},
+                 TideConfig(triage_label=False, auto_label=False))
+    assert gh.calls == [("open_issues", "o/r")]
+
+
+def test_duplicate_check_off_or_bot_author():
+    gh = FakeGitHub(issues=[{"number": 2, "title": "Reminders posted twice"}])
+    issue = {"number": 4, "title": "Reminders posted twice"}
+    issue_opened(gh, "o/r", issue, TideConfig(triage_label=False, auto_label=False,
+                                               duplicate_check=False))
+    bot_issue = dict(issue, user={"login": "renovate[bot]"})
+    issue_opened(gh, "o/r", bot_issue, TideConfig(triage_label=False, auto_label=False))
+    assert gh.calls == []

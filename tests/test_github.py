@@ -207,3 +207,13 @@ def test_repo_labels_pages():
     labels = gh.repo_labels("o/r")
     assert calls[0].url.path == "/repos/o/r/labels"
     assert len(labels) == 101 and labels[-1] == "bug"
+
+
+def test_open_issues_skips_pull_requests():
+    def handler(request):
+        assert request.url.params["state"] == "open"
+        return httpx.Response(200, json=[{"number": 1}, {"number": 2, "pull_request": {}}])
+
+    calls, gh = client(handler)
+    assert gh.open_issues("o/r") == [{"number": 1}]
+    assert calls[0].url.path == "/repos/o/r/issues" and len(calls) == 1

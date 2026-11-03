@@ -31,6 +31,7 @@ class TideConfig:
     star_gate: bool = False
     triage_label: bool = True
     pr_lint: bool = True
+    duplicate_check: bool = True
     reviewers: Tuple[Rule, ...] = ()
 
     @classmethod

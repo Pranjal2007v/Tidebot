@@ -11,6 +11,7 @@ import re
 from typing import List, Optional
 
 from .config import TideConfig
+from .duplicates import duplicates_comment, find_duplicates, tokens
 from .github import GitHubClient, GitHubError
 from .help import welcome_text
 from .labeler import classify, pick_labels
@@ -116,6 +117,20 @@ def issue_opened(gh: GitHubClient, repo: str, issue: dict, config: TideConfig) -
         labels += content_labels(gh, repo, issue)
     if labels:
         gh.add_labels(repo, issue["number"], labels)
+    if config.duplicate_check:
+        report_duplicates(gh, repo, issue)
+
+
+def report_duplicates(gh: GitHubClient, repo: str, issue: dict) -> None:
+    """Reply with open issues that look like the same report; never close anything."""
+    if is_bot((issue.get("user") or {}).get("login", "")):
+        return
+    # An issue with no words to compare can't match, so skip the API read.
+    if not tokens(issue.get("title"), issue.get("body")):
+        return
+    reply = duplicates_comment(find_duplicates(issue, gh.open_issues(repo)))
+    if reply:
+        gh.post_comment(repo, issue["number"], reply)
 
 
 def content_labels(gh: GitHubClient, repo: str, issue: dict) -> List[str]:

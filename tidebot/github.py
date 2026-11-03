@@ -28,6 +28,8 @@ _STAR_PAGES = 10
 _FILE_PAGES = 30
 # Pages of a repo's labels to read; few repos have more than 300.
 _LABEL_PAGES = 3
+# Pages of open issues to compare a new issue against.
+_ISSUE_PAGES = 5
 
 
 class GitHubError(Exception):
@@ -114,6 +116,17 @@ class GitHubClient:
             if len(labels) < 100:
                 break
         return names
+
+    def open_issues(self, repo: str) -> List[dict]:
+        """Return the most recently updated open issues, without pull requests."""
+        issues: List[dict] = []
+        for page in range(1, _ISSUE_PAGES + 1):
+            batch = self._request("GET", f"/repos/{repo}/issues", params={
+                "state": "open", "sort": "updated", "per_page": 100, "page": page}).json()
+            issues.extend(i for i in batch if "pull_request" not in i)
+            if len(batch) < 100:
+                break
+        return issues
 
     def remove_label(self, repo: str, number: int, label: str) -> None:
         # A label that isn't on the issue is already removed.

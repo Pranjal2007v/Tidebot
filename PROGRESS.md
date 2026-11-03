@@ -152,3 +152,30 @@ The spec is [README.md](README.md). Work follows its [Roadmap](README.md#roadmap
 | B | bitflicker64 | himnshuverma10152006@gmail.com | `c7df0754b3122a5595b63c72bbc20fb4ca30095c` | feat: label PR size on open and relabel it on new pushes |
 | C | Payal-Phougat | 226825128+Payal-Phougat@users.noreply.github.com | `0463b1c763f351768315a280ebdc2d0b950cdbd3` | feat: lint PR titles and descriptions in the welcome comment |
 | D | Pranjal2007v | pranjalgangwar910@gmail.com | `e03a3cdd9149117c9e6ecbfbc59aa04419666783` | feat: triage new issues and assign them to whoever asks |
+
+## Run 7 (2026-11-03)
+
+**Estimated complete:** 35%
+
+**Added**
+
+- `tidebot/owners.py`: matches changed files to code owners with CODEOWNERS pattern rules (unanchored names match at any depth, a leading or inner slash anchors to the root, a trailing slash means a directory, `dir/*` covers only the files directly in `dir`, `**` crosses directories, and the last matching rule wins). `.tide.yml` takes a `reviewers` map from pattern to logins or `@org/team` names. When it is set, it replaces CODEOWNERS. Otherwise Tidebot reads `.github/CODEOWNERS`, `CODEOWNERS` or `docs/CODEOWNERS`, the same places GitHub checks.
+- Reviewers by code area when a PR opens, from [Automatic behavior](README.md#automatic-behavior). Tidebot lists the PR's files (a renamed file counts under its old path too), asks the owners for a review and leaves out the author and anyone already asked. Teams are requested as teams. Drafts wait until `ready_for_review`, as GitHub does for CODEOWNERS. If GitHub refuses the request, the error is logged and the welcome still posts.
+- `tidebot/labeler.py`: when `auto_label` is on, a new issue is labeled bug, enhancement, docs or question by keyword rules. Title words count double. An issue gets bug or enhancement, never both, and a tie gives neither. Only labels the repo already has are used, under their usual names (`bug`, `kind/bug`, `type: bug` and so on). Labels the issue already has, for example from a template, are left alone. The repo's labels are read only when a rule matched.
+- `tidebot/duplicates.py`: the TF-IDF half of the duplicate check. A new issue is compared with up to 500 recently updated open issues by cosine similarity, with the title counted twice. Up to three matches scoring 0.5 or more get one reply that links them and points to `/duplicate`. Nothing is closed automatically. Scores from 0.3 to 0.5 are kept for the AI check, which comes with the AI work. A new `duplicate_check` option in `.tide.yml` (default on) turns it off.
+
+**Next 5%**
+
+- The start of [AI commands](README.md#ai-commands-14): a client for any OpenAI-compatible endpoint (`TIDEBOT_AI_URL`, `TIDEBOT_AI_KEY`, `TIDEBOT_AI_MODEL`) with timeouts and a clear reply when no model is configured.
+- The AI queue from [Architecture](README.md#architecture): one worker running AI commands in order, so a small server isn't overloaded, with the queue length shown in the reply when a command has to wait.
+- First AI commands on top of it: `/ask`, `/summarize` (the issue or PR thread) and `/explain`.
+- The AI check on borderline duplicate matches (scores 0.3 to 0.5).
+
+**Blockers:** none. Still not run against a live GitHub App; API calls are covered by mocked tests.
+
+| Commit | GitHub | Email | SHA | Message |
+|---|---|---|---|---|
+| A | bitflicker64 | himnshuverma10152006@gmail.com | `51eb25be287e0ca03a71373d0d9fa5999f83a984` | feat: match changed files to reviewers from CODEOWNERS or .tide.yml |
+| B | Payal-Phougat | 226825128+Payal-Phougat@users.noreply.github.com | `ba7890dc6960e8832693797e8a0195a1421a336a` | feat: request reviews from code owners when a PR opens |
+| C | Pranjal2007v | pranjalgangwar910@gmail.com | `9f4c33926f7744e3ac83e02078c91e3bb6ea4201` | feat: label new issues as bug, enhancement, docs or question |
+| D | ishitasharma2490 | ishitasharma2490@gmail.com | *(this commit, filled in next run)* | feat: link likely duplicate issues using TF-IDF similarity |
