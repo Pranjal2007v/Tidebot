@@ -195,3 +195,15 @@ def test_request_reviewers_with_teams():
     gh.request_reviewers("o/r", 3, ["bob"])
     assert json.loads(calls[0].content) == {"reviewers": ["bob"], "team_reviewers": ["writers"]}
     assert json.loads(calls[1].content) == {"reviewers": ["bob"]}
+
+
+def test_repo_labels_pages():
+    def handler(request):
+        page = int(request.url.params["page"])
+        names = [f"l{i}" for i in range(100)] if page == 1 else ["bug"]
+        return httpx.Response(200, json=[{"name": n} for n in names])
+
+    calls, gh = client(handler)
+    labels = gh.repo_labels("o/r")
+    assert calls[0].url.path == "/repos/o/r/labels"
+    assert len(labels) == 101 and labels[-1] == "bug"

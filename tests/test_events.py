@@ -21,6 +21,10 @@ class FakeGitHub:
     def request_reviewers(self, repo, number, logins, teams=()):
         self.calls.append(("request_reviewers", repo, number, list(logins), list(teams)))
 
+    def repo_labels(self, repo):
+        self.calls.append(("repo_labels", repo))
+        return ["bug", "enhancement", "documentation", "question", "triage"]
+
     def post_comment(self, repo, number, body):
         self.calls.append(("post_comment", repo, number, body))
 
@@ -201,3 +205,25 @@ def test_refused_review_request_still_welcomes():
     gh = Refusing({"CODEOWNERS": CODEOWNERS}, ["app.py"])
     pull_request_opened(gh, "o/r", pr(), TideConfig(size_labels=False))
     assert [c[0] for c in gh.calls] == ["post_comment"]
+
+
+def test_new_issue_is_labeled_by_content():
+    gh = FakeGitHub()
+    issue_opened(gh, "o/r", {"number": 4, "title": "Crash in the docs build", "body": ""},
+                 TideConfig())
+    assert gh.calls == [("repo_labels", "o/r"),
+                        ("add_labels", "o/r", 4, ["triage", "bug", "documentation"])]
+
+
+def test_content_labels_skip_labels_already_set():
+    gh = FakeGitHub()
+    issue = {"number": 4, "title": "Crash on save", "labels": [{"name": "Bug"}]}
+    issue_opened(gh, "o/r", issue, TideConfig(triage_label=False))
+    assert gh.calls == [("repo_labels", "o/r")]
+
+
+def test_auto_label_off_in_config():
+    gh = FakeGitHub()
+    issue_opened(gh, "o/r", {"number": 4, "title": "Crash on save"},
+                 TideConfig(auto_label=False))
+    assert gh.calls == [("add_labels", "o/r", 4, ["triage"])]

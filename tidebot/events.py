@@ -13,6 +13,7 @@ from typing import List, Optional
 from .config import TideConfig
 from .github import GitHubClient, GitHubError
 from .help import welcome_text
+from .labeler import classify, pick_labels
 from .lint import lint_comment, lint_pull_request
 from .owners import CODEOWNERS_PATHS, Rule, owners_for, parse_codeowners, split_reviewers
 from .router import is_bot
@@ -107,9 +108,28 @@ def label_size(gh: GitHubClient, repo: str, pr: dict) -> None:
 
 
 def issue_opened(gh: GitHubClient, repo: str, issue: dict, config: TideConfig) -> None:
-    """Mark a new issue for triage until a maintainer looks at it."""
+    """Label a new issue by content and mark it for triage, per the config."""
+    labels: List[str] = []
     if config.triage_label:
-        gh.add_labels(repo, issue["number"], [TRIAGE_LABEL])
+        labels.append(TRIAGE_LABEL)
+    if config.auto_label:
+        labels += content_labels(gh, repo, issue)
+    if labels:
+        gh.add_labels(repo, issue["number"], labels)
+
+
+def content_labels(gh: GitHubClient, repo: str, issue: dict) -> List[str]:
+    """Labels the issue's text calls for that the repo has and the issue lacks.
+
+    The repo's labels are only read when the text matches a rule, and an
+    issue opened from a template that already set a label keeps it alone.
+    """
+    kinds = classify(issue.get("title"), issue.get("body"))
+    if not kinds:
+        return []
+    current = {(label.get("name") or "").lower() for label in issue.get("labels") or []}
+    return [name for name in pick_labels(kinds, gh.repo_labels(repo))
+            if name.lower() not in current]
 
 
 def claims_issue(body: Optional[str]) -> bool:

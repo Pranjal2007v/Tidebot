@@ -26,6 +26,8 @@ _PASSING_CHECKS = {"success", "neutral", "skipped"}
 _STAR_PAGES = 10
 # GitHub lists at most 3000 files of a PR, 100 per page.
 _FILE_PAGES = 30
+# Pages of a repo's labels to read; few repos have more than 300.
+_LABEL_PAGES = 3
 
 
 class GitHubError(Exception):
@@ -101,6 +103,17 @@ class GitHubClient:
     def add_labels(self, repo: str, number: int, labels: Iterable[str]) -> None:
         self._request("POST", f"/repos/{repo}/issues/{number}/labels",
                       json={"labels": list(labels)})
+
+    def repo_labels(self, repo: str) -> List[str]:
+        """Return the names of the labels defined in ``repo``."""
+        names: List[str] = []
+        for page in range(1, _LABEL_PAGES + 1):
+            labels = self._request("GET", f"/repos/{repo}/labels",
+                                   params={"per_page": 100, "page": page}).json()
+            names.extend(label["name"] for label in labels)
+            if len(labels) < 100:
+                break
+        return names
 
     def remove_label(self, repo: str, number: int, label: str) -> None:
         # A label that isn't on the issue is already removed.
