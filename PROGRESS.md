@@ -151,4 +151,4 @@ The spec is [README.md](README.md). Work follows its [Roadmap](README.md#roadmap
 | A | ishitasharma2490 | ishitasharma2490@gmail.com | `fdaf3f36601cc29e7d51704c3b33c04b41c005ea` | feat: welcome new pull requests with the command list |
 | B | bitflicker64 | himnshuverma10152006@gmail.com | `c7df0754b3122a5595b63c72bbc20fb4ca30095c` | feat: label PR size on open and relabel it on new pushes |
 | C | Payal-Phougat | 226825128+Payal-Phougat@users.noreply.github.com | `0463b1c763f351768315a280ebdc2d0b950cdbd3` | feat: lint PR titles and descriptions in the welcome comment |
-| D | Pranjal2007v | pranjalgangwar910@gmail.com | *(this commit, filled in next run)* | feat: triage new issues and assign them to whoever asks |
+| D | Pranjal2007v | pranjalgangwar910@gmail.com | `e03a3cdd9149117c9e6ecbfbc59aa04419666783` | feat: triage new issues and assign them to whoever asks |

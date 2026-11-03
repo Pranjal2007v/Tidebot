@@ -40,3 +40,14 @@ def test_invalid_yaml_gives_defaults():
 
 def test_non_mapping_gives_defaults():
     assert parse_config("- a\n- b\n") == TideConfig()
+
+
+def test_reviewers_map():
+    cfg = parse_config("reviewers:\n  docs/: [alice, '@bob']\n  '*.py': carol\n")
+    assert cfg.reviewers == (("docs/", ("@alice", "@bob")), ("*.py", ("@carol",)))
+
+
+def test_bad_reviewers_entries_are_skipped():
+    cfg = parse_config("reviewers:\n  docs/: 3\n  src/: [dave, 7]\n")
+    assert cfg.reviewers == (("src/", ("@dave",)),)
+    assert parse_config("reviewers: [a, b]\n").reviewers == ()
