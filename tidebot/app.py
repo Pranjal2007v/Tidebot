@@ -26,7 +26,8 @@ from fastapi import FastAPI, HTTPException, Request
 
 from .community import Community
 from .config import CONFIG_PATH, TideConfig, parse_config
-from .events import claim_issue, issue_opened, pull_request_opened, pull_request_pushed
+from .events import (claim_issue, issue_opened, pull_request_opened, pull_request_pushed,
+                     pull_request_ready)
 from .github import AppAuth, GitHubClient, GitHubError
 from .help import help_text
 from .permissions import Tier, tier_for
@@ -54,6 +55,7 @@ REMINDER_INTERVAL = 60
 _EVENT_HANDLERS = {
     ("pull_request", "opened"): ("pull_request", pull_request_opened),
     ("pull_request", "synchronize"): ("pull_request", pull_request_pushed),
+    ("pull_request", "ready_for_review"): ("pull_request", pull_request_ready),
     ("issues", "opened"): ("issue", issue_opened),
 }
 

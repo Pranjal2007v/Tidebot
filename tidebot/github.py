@@ -24,6 +24,8 @@ _TOKEN_MARGIN = 60
 _PASSING_CHECKS = {"success", "neutral", "skipped"}
 # How many pages of a user's stars to read before giving up on the star check.
 _STAR_PAGES = 10
+# GitHub lists at most 3000 files of a PR, 100 per page.
+_FILE_PAGES = 30
 
 
 class GitHubError(Exception):
@@ -137,9 +139,26 @@ class GitHubClient:
         self._request("POST", f"/repos/{repo}/issues/{number}/assignees",
                       json={"assignees": list(logins)})
 
-    def request_reviewers(self, repo: str, number: int, logins: Iterable[str]) -> None:
-        self._request("POST", f"/repos/{repo}/pulls/{number}/requested_reviewers",
-                      json={"reviewers": list(logins)})
+    def request_reviewers(self, repo: str, number: int, logins: Iterable[str],
+                          teams: Iterable[str] = ()) -> None:
+        body = {"reviewers": list(logins)}
+        if teams:
+            body["team_reviewers"] = list(teams)
+        self._request("POST", f"/repos/{repo}/pulls/{number}/requested_reviewers", json=body)
+
+    def pull_files(self, repo: str, number: int) -> List[str]:
+        """Return the paths a PR changes; a rename counts its old path too."""
+        paths: List[str] = []
+        for page in range(1, _FILE_PAGES + 1):
+            files = self._request("GET", f"/repos/{repo}/pulls/{number}/files",
+                                  params={"per_page": 100, "page": page}).json()
+            for f in files:
+                paths.append(f["filename"])
+                if f.get("previous_filename"):
+                    paths.append(f["previous_filename"])
+            if len(files) < 100:
+                break
+        return paths
 
     def pull(self, repo: str, number: int) -> dict:
         return self._request("GET", f"/repos/{repo}/pulls/{number}").json()

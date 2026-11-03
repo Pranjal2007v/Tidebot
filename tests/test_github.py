@@ -172,3 +172,26 @@ def test_merge_and_approve_requests():
     assert calls[0].method == "PUT" and calls[0].url.path == "/repos/o/r/pulls/2/merge"
     assert json.loads(calls[0].content) == {"sha": "abc", "merge_method": "squash"}
     assert json.loads(calls[1].content) == {"event": "APPROVE", "body": "ok"}
+
+
+def test_pull_files_pages_and_keeps_renames():
+    def handler(request):
+        page = int(request.url.params["page"])
+        if page == 1:
+            files = [{"filename": f"f{i}"} for i in range(99)]
+            files.append({"filename": "new.py", "previous_filename": "old.py"})
+            return httpx.Response(200, json=files)
+        return httpx.Response(200, json=[{"filename": "last"}])
+
+    calls, gh = client(handler)
+    paths = gh.pull_files("o/r", 3)
+    assert len(calls) == 2 and calls[0].url.path == "/repos/o/r/pulls/3/files"
+    assert paths[-3:] == ["new.py", "old.py", "last"]
+
+
+def test_request_reviewers_with_teams():
+    calls, gh = client(lambda r: httpx.Response(201, json={}))
+    gh.request_reviewers("o/r", 3, ["bob"], ["writers"])
+    gh.request_reviewers("o/r", 3, ["bob"])
+    assert json.loads(calls[0].content) == {"reviewers": ["bob"], "team_reviewers": ["writers"]}
+    assert json.loads(calls[1].content) == {"reviewers": ["bob"]}

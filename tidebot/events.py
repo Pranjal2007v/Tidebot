@@ -14,6 +14,7 @@ from .config import TideConfig
 from .github import GitHubClient, GitHubError
 from .help import welcome_text
 from .lint import lint_comment, lint_pull_request
+from .owners import CODEOWNERS_PATHS, Rule, owners_for, parse_codeowners, split_reviewers
 from .router import is_bot
 from .size import changed_lines, size_label, stale_labels
 
@@ -28,9 +29,10 @@ _CLAIM = re.compile(
 
 
 def pull_request_opened(gh: GitHubClient, repo: str, pr: dict, config: TideConfig) -> None:
-    """Welcome the author of a new PR, label its size and lint it, per the config."""
+    """Welcome the author of a new PR, label its size, lint it and ask for reviews."""
     if config.size_labels:
         label_size(gh, repo, pr)
+    assign_reviewers(gh, repo, pr, config)
     author = (pr.get("user") or {}).get("login", "")
     if is_bot(author):
         return
@@ -46,6 +48,48 @@ def pull_request_pushed(gh: GitHubClient, repo: str, pr: dict, config: TideConfi
     """New commits change the PR's size, so relabel it."""
     if config.size_labels:
         label_size(gh, repo, pr)
+
+
+def pull_request_ready(gh: GitHubClient, repo: str, pr: dict, config: TideConfig) -> None:
+    """A draft marked ready for review gets the reviewers it skipped on open."""
+    assign_reviewers(gh, repo, pr, config)
+
+
+def reviewer_rules(gh: GitHubClient, repo: str, config: TideConfig) -> List[Rule]:
+    """The ``reviewers`` map from ``.tide.yml`` if it has one, else CODEOWNERS."""
+    if config.reviewers:
+        return list(config.reviewers)
+    for path in CODEOWNERS_PATHS:
+        text = gh.fetch_file(repo, path)
+        if text is not None:
+            return parse_codeowners(text)
+    return []
+
+
+def assign_reviewers(gh: GitHubClient, repo: str, pr: dict, config: TideConfig) -> None:
+    """Request reviews from the owners of the code a PR changes.
+
+    Drafts wait until they are marked ready, as GitHub does for CODEOWNERS.
+    The author and anyone already asked are left out. A refused request
+    (say, an owner without access to the repo) is logged, not retried.
+    """
+    if pr.get("draft") or is_bot((pr.get("user") or {}).get("login", "")):
+        return
+    rules = reviewer_rules(gh, repo, config)
+    if not any(owners for _, owners in rules):
+        return
+    author = (pr.get("user") or {}).get("login", "")
+    users, teams = split_reviewers(owners_for(rules, gh.pull_files(repo, pr["number"])), author)
+    asked = {(u.get("login") or "").lower() for u in pr.get("requested_reviewers") or []}
+    asked_teams = {(t.get("slug") or "").lower() for t in pr.get("requested_teams") or []}
+    users = [u for u in users if u.lower() not in asked]
+    teams = [t for t in teams if t.lower() not in asked_teams]
+    if not users and not teams:
+        return
+    try:
+        gh.request_reviewers(repo, pr["number"], users, teams)
+    except GitHubError as err:
+        print(f"tidebot: requesting reviews on {repo}#{pr['number']} failed: {err}")
 
 
 def label_size(gh: GitHubClient, repo: str, pr: dict) -> None:

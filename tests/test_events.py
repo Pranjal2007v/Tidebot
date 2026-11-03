@@ -1,12 +1,25 @@
 from tidebot.config import TideConfig
-from tidebot.events import (claim_issue, claims_issue, issue_opened, label_size,
-                            pull_request_opened, pull_request_pushed)
+from tidebot.config import parse_config
+from tidebot.events import (assign_reviewers, claim_issue, claims_issue, issue_opened,
+                            label_size, pull_request_opened, pull_request_pushed,
+                            pull_request_ready)
 from tidebot.github import GitHubError
 
 
 class FakeGitHub:
-    def __init__(self):
+    def __init__(self, files=None, changed=()):
         self.calls = []
+        self.files = files or {}
+        self.changed = list(changed)
+
+    def fetch_file(self, repo, path):
+        return self.files.get(path)
+
+    def pull_files(self, repo, number):
+        return self.changed
+
+    def request_reviewers(self, repo, number, logins, teams=()):
+        self.calls.append(("request_reviewers", repo, number, list(logins), list(teams)))
 
     def post_comment(self, repo, number, body):
         self.calls.append(("post_comment", repo, number, body))
@@ -140,3 +153,51 @@ def test_refused_assignment_stays_quiet():
             raise GitHubError(422, "cannot be assigned")
 
     assert claim_issue(Refusing(), "o/r", {"number": 4}, "bob", "can I take this?") is None
+
+
+CODEOWNERS = "*.py @bob\n/docs/ @carol @org/writers\n"
+
+
+def test_owners_of_changed_files_are_asked_to_review():
+    gh = FakeGitHub({".github/CODEOWNERS": CODEOWNERS}, ["app.py", "docs/x.md"])
+    assign_reviewers(gh, "o/r", pr(), TideConfig())
+    assert gh.calls == [("request_reviewers", "o/r", 7, ["bob", "carol"], ["writers"])]
+
+
+def test_tide_yml_reviewers_beat_codeowners():
+    gh = FakeGitHub({"CODEOWNERS": CODEOWNERS}, ["app.py"])
+    config = parse_config("reviewers:\n  '*.py': [dave]\n")
+    assign_reviewers(gh, "o/r", pr(), config)
+    assert gh.calls == [("request_reviewers", "o/r", 7, ["dave"], [])]
+
+
+def test_author_and_already_asked_are_skipped():
+    gh = FakeGitHub({"CODEOWNERS": "* @alice @bob @erin\n"}, ["x"])
+    assign_reviewers(gh, "o/r", pr(requested_reviewers=[{"login": "Bob"}]), TideConfig())
+    assert gh.calls == [("request_reviewers", "o/r", 7, ["erin"], [])]
+
+
+def test_nothing_to_ask():
+    gh = FakeGitHub({"CODEOWNERS": "/docs/ @carol\n"}, ["app.py"])
+    assign_reviewers(gh, "o/r", pr(), TideConfig())
+    gh_author_only = FakeGitHub({"CODEOWNERS": "* @alice\n"}, ["app.py"])
+    assign_reviewers(gh_author_only, "o/r", pr(), TideConfig())
+    assert gh.calls == gh_author_only.calls == []
+
+
+def test_drafts_wait_until_ready():
+    gh = FakeGitHub({"CODEOWNERS": CODEOWNERS}, ["app.py"])
+    pull_request_opened(gh, "o/r", pr(draft=True), TideConfig(size_labels=False))
+    assert [c[0] for c in gh.calls] == ["post_comment"]
+    pull_request_ready(gh, "o/r", pr(), TideConfig())
+    assert gh.calls[-1] == ("request_reviewers", "o/r", 7, ["bob"], [])
+
+
+def test_refused_review_request_still_welcomes():
+    class Refusing(FakeGitHub):
+        def request_reviewers(self, repo, number, logins, teams=()):
+            raise GitHubError(422, "not a collaborator")
+
+    gh = Refusing({"CODEOWNERS": CODEOWNERS}, ["app.py"])
+    pull_request_opened(gh, "o/r", pr(), TideConfig(size_labels=False))
+    assert [c[0] for c in gh.calls] == ["post_comment"]
