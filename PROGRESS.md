@@ -178,4 +178,4 @@ The spec is [README.md](README.md). Work follows its [Roadmap](README.md#roadmap
 | A | bitflicker64 | himnshuverma10152006@gmail.com | `51eb25be287e0ca03a71373d0d9fa5999f83a984` | feat: match changed files to reviewers from CODEOWNERS or .tide.yml |
 | B | Payal-Phougat | 226825128+Payal-Phougat@users.noreply.github.com | `ba7890dc6960e8832693797e8a0195a1421a336a` | feat: request reviews from code owners when a PR opens |
 | C | Pranjal2007v | pranjalgangwar910@gmail.com | `9f4c33926f7744e3ac83e02078c91e3bb6ea4201` | feat: label new issues as bug, enhancement, docs or question |
-| D | ishitasharma2490 | ishitasharma2490@gmail.com | *(this commit, filled in next run)* | feat: link likely duplicate issues using TF-IDF similarity |
+| D | ishitasharma2490 | ishitasharma2490@gmail.com | `029ee81040033a0dea3529c698d20967626784c8` | feat: link likely duplicate issues using TF-IDF similarity |
