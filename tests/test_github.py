@@ -223,3 +223,21 @@ def test_issue_reads_the_issue():
     calls, gh = client(lambda r: httpx.Response(200, json={"title": "t", "body": "b"}))
     assert gh.issue("o/r", 5) == {"title": "t", "body": "b"}
     assert calls[0].method == "GET" and calls[0].url.path == "/repos/o/r/issues/5"
+
+
+def test_issue_comments_page_until_a_short_page():
+    def handler(r):
+        page = int(r.url.params["page"])
+        return httpx.Response(200, json=[{"id": page}] * (100 if page == 1 else 2))
+
+    calls, gh = client(handler)
+    assert len(gh.issue_comments("o/r", 5)) == 102
+    assert [c.url.path for c in calls] == ["/repos/o/r/issues/5/comments"] * 2
+
+
+def test_pull_diff_asks_for_the_diff_and_handles_too_large():
+    calls, gh = client(lambda r: httpx.Response(200, text="diff --git a/x b/x"))
+    assert gh.pull_diff("o/r", 5) == "diff --git a/x b/x"
+    assert calls[0].headers["Accept"] == "application/vnd.github.diff"
+    _, gh = client(lambda r: httpx.Response(406, text="too large"))
+    assert gh.pull_diff("o/r", 5) == ""

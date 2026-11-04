@@ -9,17 +9,20 @@ Commands the model can't help with yet are left out of ``AI_HANDLERS``.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Callable, Dict, Optional
+from typing import Callable, Dict, List, Optional
 
 from .ai import AIClient, AIError
 from .aiqueue import Job
 from .commands import Command
 from .github import GitHubClient, GitHubError
+from .router import is_bot
 from .workflow import Target
 
 # Characters of issue or PR text sent to the model; small models have
 # small context windows.
 MAX_CONTEXT = 8000
+# Of that, the most the opening post of a long thread may take.
+MAX_OPENING = 3000
 # GitHub refuses comments over 65536 characters.
 MAX_REPLY = 60000
 
@@ -51,14 +54,74 @@ def _opening_post(gh: GitHubClient, t: Target) -> str:
     return f"{kind} #{t.number}: {issue.get('title') or ''}\n\n{clip(issue.get('body'))}"
 
 
+def thread_text(issue: dict, comments: List[dict], is_pr: bool, number: int,
+                limit: int = MAX_CONTEXT) -> str:
+    """The opening post and the latest human comments that fit in ``limit``.
+
+    Bot comments, Tidebot's own included, are left out. When the thread is
+    too long the oldest comments go first, since the latest say where it
+    stands.
+    """
+    kind = "Pull request" if is_pr else "Issue"
+    author = (issue.get("user") or {}).get("login", "someone")
+    head = (f"{kind} #{number} by @{author}: {issue.get('title') or ''}\n\n"
+            f"{clip(issue.get('body'), MAX_OPENING)}")
+    # Leave room for the "[N earlier comments left out]" note.
+    budget = limit - len(head) - 40
+    kept: List[str] = []
+    people = [c for c in comments if not is_bot((c.get("user") or {}).get("login", ""))]
+    for c in reversed(people):
+        entry = f"@{(c.get('user') or {}).get('login', '')}: {(c.get('body') or '').strip()}"
+        if len(entry) > budget:
+            break
+        kept.append(entry)
+        budget -= len(entry) + 2
+    left_out = len(people) - len(kept)
+    parts = [head]
+    if left_out:
+        parts.append(f"[{left_out} earlier comments left out]")
+    parts += reversed(kept)
+    return "\n\n".join(parts)
+
+
 def _ask(gh: GitHubClient, ai: AIClient, t: Target, args: str) -> str:
     return ai.ask(_system(t.repo, "Answer the question using the issue or pull request "
                                   "below as context."),
                   f"{_opening_post(gh, t)}\n\nQuestion: {args}")
 
 
+def _summarize(gh: GitHubClient, ai: AIClient, t: Target, args: str) -> str:
+    thread = thread_text(gh.issue(t.repo, t.number), gh.issue_comments(t.repo, t.number),
+                         t.is_pr, t.number)
+    return ai.ask(_system(t.repo, "Summarize the thread below in a few bullets: what it is "
+                                  "about, what has been decided and what is still open."),
+                  thread)
+
+
+def _explain(gh: GitHubClient, ai: AIClient, t: Target, args: str) -> str:
+    """Explain a PR's change from its diff, or an issue in plain words.
+
+    Text after the command narrows the explanation, as in ``/explain the retry loop``.
+    """
+    if t.is_pr:
+        task = ("Explain what the pull request below changes and why, for a reviewer "
+                "who doesn't know this code yet.")
+        diff = gh.pull_diff(t.repo, t.number)
+        context = _opening_post(gh, t) + (f"\n\nDiff:\n{clip(diff)}" if diff else
+                                          "\n\n(The diff is too large to include.)")
+    else:
+        task = ("Explain the issue below in plain words: the problem, where it likely "
+                "comes from and what would fix it.")
+        context = _opening_post(gh, t)
+    if args.strip():
+        context += f"\n\nFocus on: {args.strip()}"
+    return ai.ask(_system(t.repo, task), context)
+
+
 AI_HANDLERS: Dict[str, AICommand] = {
     "ask": AICommand(_ask, "Usage: `:tide /ask where is auth handled?`"),
+    "summarize": AICommand(_summarize),
+    "explain": AICommand(_explain),
 }
 
 

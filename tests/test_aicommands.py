@@ -82,3 +82,57 @@ def test_clip():
     assert clip("  short ") == "short"
     assert clip(None) == ""
     assert clip("abcdef", 3) == "abc\n[...cut for length]"
+
+
+def comment(login, body):
+    return {"user": {"login": login}, "body": body}
+
+
+def test_summarize_sends_the_thread_without_bot_comments():
+    gh = FakeGitHub(issue={"title": "Login fails", "body": "Token is rejected.",
+                           "user": {"login": "carol"}},
+                    comments=[comment("dave", "Same here on 1.2."),
+                              comment("tidebot[bot]", "This issue looks similar to: #2"),
+                              comment("erin", "Fixed by rotating the key?")])
+    ai = FakeAI("- Login fails\n- Still open")
+    assert run(gh, ai, "summarize")[3] == "`/summarize` for @alice:\n\n- Login fails\n- Still open"
+    system, user = ai.prompts[0]
+    assert "Summarize" in system
+    assert user == ("Issue #4 by @carol: Login fails\n\nToken is rejected.\n\n"
+                    "@dave: Same here on 1.2.\n\n@erin: Fixed by rotating the key?")
+
+
+def test_long_threads_keep_the_latest_comments():
+    from tidebot.aicommands import thread_text
+
+    comments = [comment("u", f"comment {i} " + "x" * 50) for i in range(10)]
+    text = thread_text({"title": "t", "body": "b"}, comments, True, 9, limit=200)
+    assert text.startswith("Pull request #9 by @someone: t\n\nb")
+    assert "comment 9" in text and "comment 0" not in text
+    assert "earlier comments left out]" in text
+    assert len(text) <= 200
+
+
+def test_explain_a_pr_sends_its_diff():
+    gh = FakeGitHub(diff="--- a/app.py\n+++ b/app.py\n+retry()")
+    ai = FakeAI("It adds a retry.")
+    target = Target("o/r", 4, True, "alice")
+    assert run(gh, ai, "explain the retry", target)[3] == "`/explain` for @alice:\n\nIt adds a retry."
+    system, user = ai.prompts[0]
+    assert "pull request" in system
+    assert user.startswith("Pull request #4: Login fails")
+    assert "Diff:\n--- a/app.py" in user and user.endswith("Focus on: the retry")
+
+
+def test_explain_a_pr_whose_diff_is_too_large():
+    ai = FakeAI()
+    run(FakeGitHub(diff=""), ai, "explain", Target("o/r", 4, True, "alice"))
+    assert "(The diff is too large to include.)" in ai.prompts[0][1]
+
+
+def test_explain_an_issue_needs_no_diff():
+    gh, ai = FakeGitHub(), FakeAI()
+    run(gh, ai, "explain")
+    assert ("pull_diff", "o/r", 4) not in gh.calls
+    assert "plain words" in ai.prompts[0][0]
+    assert usage_error(Command("explain")) is None

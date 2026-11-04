@@ -30,6 +30,8 @@ _FILE_PAGES = 30
 _LABEL_PAGES = 3
 # Pages of open issues to compare a new issue against.
 _ISSUE_PAGES = 5
+# Pages of comments to read from one thread.
+_COMMENT_PAGES = 3
 
 
 class GitHubError(Exception):
@@ -189,6 +191,23 @@ class GitHubClient:
     def issue(self, repo: str, number: int) -> dict:
         """Return an issue or PR as the issues API sees it: title, body, labels..."""
         return self._request("GET", f"/repos/{repo}/issues/{number}").json()
+
+    def issue_comments(self, repo: str, number: int) -> List[dict]:
+        """Return the comments on an issue or PR, oldest first, up to 300."""
+        comments: List[dict] = []
+        for page in range(1, _COMMENT_PAGES + 1):
+            batch = self._request("GET", f"/repos/{repo}/issues/{number}/comments",
+                                  params={"per_page": 100, "page": page}).json()
+            comments.extend(batch)
+            if len(batch) < 100:
+                break
+        return comments
+
+    def pull_diff(self, repo: str, number: int) -> str:
+        """Return a PR's unified diff, or "" when GitHub says it is too large."""
+        res = self._request("GET", f"/repos/{repo}/pulls/{number}", ok=(200, 406),
+                            accept="application/vnd.github.diff")
+        return res.text if res.status_code == 200 else ""
 
     def pull(self, repo: str, number: int) -> dict:
         return self._request("GET", f"/repos/{repo}/pulls/{number}").json()
