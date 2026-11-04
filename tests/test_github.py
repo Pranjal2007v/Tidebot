@@ -217,3 +217,9 @@ def test_open_issues_skips_pull_requests():
     calls, gh = client(handler)
     assert gh.open_issues("o/r") == [{"number": 1}]
     assert calls[0].url.path == "/repos/o/r/issues" and len(calls) == 1
+
+
+def test_issue_reads_the_issue():
+    calls, gh = client(lambda r: httpx.Response(200, json={"title": "t", "body": "b"}))
+    assert gh.issue("o/r", 5) == {"title": "t", "body": "b"}
+    assert calls[0].method == "GET" and calls[0].url.path == "/repos/o/r/issues/5"

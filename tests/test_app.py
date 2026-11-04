@@ -252,3 +252,36 @@ def test_comment_claiming_an_issue_assigns_it():
     assert res.json()["replied"] is True
     assert gh.calls[0] == ("add_assignees", "o/r", 3, ["bob"])
     assert gh.calls[1][3].startswith("Thanks @bob")
+
+
+def test_ai_command_without_a_model_says_so():
+    gh = FakeGitHub()
+    c, _ = acting_client(gh)
+    post(c, "issue_comment", issue_payload(":tide /ask where is auth?"))
+    assert gh.calls == [("post_comment", "o/r", 3,
+                         "`/ask`: AI commands are off here: this Tidebot has no model configured.")]
+
+
+def test_ai_command_is_queued_and_posts_its_answer():
+    from tidebot.aiqueue import AIQueue
+
+    class Model:
+        def ask(self, system, user, **kwargs):
+            return "It is in app.py."
+
+    class Issues(FakeGitHub):
+        def issue(self, repo, number):
+            return {"title": "Where is auth?", "body": ""}
+
+    gh = Issues()
+    queue = AIQueue(Model())
+    c = TestClient(create_app(SECRET, StateStore(None), github=lambda i: gh, ai=queue))
+    res = post(c, "issue_comment", issue_payload(":tide /ask where is auth?\n:tide /ask"))
+    queue.join()
+    assert res.json()["replied"] is True
+    # The usage reply goes out with the webhook; the answer comes from the
+    # worker thread, so either may land first.
+    assert sorted(gh.calls) == [
+        ("post_comment", "o/r", 3, "Usage: `:tide /ask where is auth handled?`"),
+        ("post_comment", "o/r", 3, "`/ask` for @alice:\n\nIt is in app.py."),
+    ]

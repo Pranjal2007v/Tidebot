@@ -7,11 +7,13 @@ also acts: it looks up the author's real permission and the repo's
 output and the reason for any denied command, posts ``/remind``
 reminders once they are due, and handles new pull requests as the README's
 Automatic behavior section describes: new PRs and issues, and comments
-asking to work on an issue.
+asking to work on an issue. AI commands go to the AI queue, and each posts
+its own answer when the model is done.
 
 Run it with ``uvicorn tidebot.app:app`` and ``TIDEBOT_WEBHOOK_SECRET`` set.
 Set ``TIDEBOT_APP_ID`` and ``TIDEBOT_PRIVATE_KEY`` (the path to the App's
-``.pem`` file) to let it reply.
+``.pem`` file) to let it reply, and the ``TIDEBOT_AI_*`` variables described
+in ``tidebot/ai.py`` to turn on AI commands.
 """
 
 from __future__ import annotations
@@ -24,6 +26,9 @@ from typing import Callable, Optional
 
 from fastapi import FastAPI, HTTPException, Request
 
+from .ai import NOT_CONFIGURED, ai_from_env
+from .aicommands import AI_HANDLERS, make_job, usage_error
+from .aiqueue import AIQueue, waiting_note
 from .community import Community
 from .config import CONFIG_PATH, TideConfig, parse_config
 from .events import (claim_issue, issue_opened, pull_request_opened, pull_request_pushed,
@@ -65,12 +70,18 @@ def permission_from_association(repo: str, comment: dict) -> Optional[str]:
 
 
 def _reply_for(gh: GitHubClient, target: Target, action: Action,
-               permission: Optional[str], community: Community) -> Optional[str]:
+               permission: Optional[str], community: Community,
+               ai: Optional[AIQueue]) -> Optional[str]:
     name = action.command.name
     if not action.allowed:
         return f"`/{name}`: {action.reason}"
     if name == "help":
         return help_text(target.author, permission)
+    if name in AI_HANDLERS:
+        usage = usage_error(action.command)
+        if usage or ai is None:
+            return usage or f"`/{name}`: {NOT_CONFIGURED}"
+        return waiting_note(name, ai.submit(make_job(gh, target, action.command)))
     try:
         if community.handles(name):
             return community.run(gh, target, action.command)
@@ -82,7 +93,8 @@ def _reply_for(gh: GitHubClient, target: Target, action: Action,
 def create_app(secret: str, store: StateStore,
                permission_lookup: PermissionLookup = permission_from_association,
                github: Optional[ClientFactory] = None,
-               reminder_interval: float = REMINDER_INTERVAL) -> FastAPI:
+               reminder_interval: float = REMINDER_INTERVAL,
+               ai: Optional[AIQueue] = None) -> FastAPI:
     limiter = RateLimiter(store)
     community = Community(store)
 
@@ -171,7 +183,7 @@ def create_app(secret: str, store: StateStore,
         if gh is not None and "number" in issue:
             target = Target(repo, issue["number"], "pull_request" in issue, author,
                             installation)
-            replies = [r for r in (_reply_for(gh, target, a, permission, community)
+            replies = [r for r in (_reply_for(gh, target, a, permission, community, ai)
                                        for a in actions) if r]
             claimed = claim_issue(gh, repo, issue, author, comment.get("body"))
             if claimed:
@@ -199,9 +211,11 @@ def _github_from_env() -> Optional[ClientFactory]:
 
 
 def _app_from_env() -> FastAPI:
+    model = ai_from_env()
     return create_app(os.environ.get("TIDEBOT_WEBHOOK_SECRET", ""),
                       StateStore(os.environ.get("TIDEBOT_STATE", DEFAULT_PATH)),
-                      github=_github_from_env())
+                      github=_github_from_env(),
+                      ai=AIQueue(model) if model else None)
 
 
 app = _app_from_env()

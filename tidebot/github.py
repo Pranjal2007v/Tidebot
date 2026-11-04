@@ -186,6 +186,10 @@ class GitHubClient:
                 break
         return paths
 
+    def issue(self, repo: str, number: int) -> dict:
+        """Return an issue or PR as the issues API sees it: title, body, labels..."""
+        return self._request("GET", f"/repos/{repo}/issues/{number}").json()
+
     def pull(self, repo: str, number: int) -> dict:
         return self._request("GET", f"/repos/{repo}/pulls/{number}").json()
 
