@@ -22,6 +22,7 @@ import asyncio
 import json
 import os
 from contextlib import asynccontextmanager
+from functools import partial
 from typing import Callable, Optional
 
 from fastapi import FastAPI, HTTPException, Request
@@ -97,6 +98,9 @@ def create_app(secret: str, store: StateStore,
                ai: Optional[AIQueue] = None) -> FastAPI:
     limiter = RateLimiter(store)
     community = Community(store)
+    # New issues may queue an AI check on borderline duplicates.
+    event_handlers = {**_EVENT_HANDLERS,
+                      ("issues", "opened"): ("issue", partial(issue_opened, ai=ai))}
 
     def deliver_reminders() -> None:
         try:
@@ -146,7 +150,7 @@ def create_app(secret: str, store: StateStore,
         installation = payload.get("installation", {}).get("id")
         gh = github(installation) if github and installation else None
 
-        handled = _EVENT_HANDLERS.get((event, payload.get("action", "")))
+        handled = event_handlers.get((event, payload.get("action", "")))
         if handled and gh is not None:
             key, handler = handled
             item = payload.get(key, {})

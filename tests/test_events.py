@@ -259,3 +259,39 @@ def test_duplicate_check_off_or_bot_author():
     bot_issue = dict(issue, user={"login": "renovate[bot]"})
     issue_opened(gh, "o/r", bot_issue, TideConfig(triage_label=False, auto_label=False))
     assert gh.calls == []
+
+
+def test_borderline_duplicates_wait_for_the_ai_check():
+    from tidebot.aiqueue import AIQueue
+
+    class Model:
+        def ask(self, system, user, **kwargs):
+            return "yes"
+
+    gh = FakeGitHub(issues=[
+        {"number": 1, "title": "Webhook crashes on startup",
+         "body": "Crash when state file is missing on first run."},
+        {"number": 2, "title": "Receiver fails when the state file is missing",
+         "body": "Starting the receiver errors out."},
+        {"number": 3, "title": "Add dark mode to dashboard", "body": "Please add a dark theme."}])
+    queue = AIQueue(Model())
+    issue = {"number": 9, "title": "Webhook crashes on startup",
+             "body": "The receiver crashes when the state file is missing."}
+    issue_opened(gh, "o/r", issue, TideConfig(triage_label=False, auto_label=False), ai=queue)
+    queue.join()
+    assert gh.calls[0] == ("open_issues", "o/r")
+    (_, _, number, body), = gh.calls[1:]
+    assert number == 9 and "#1 Webhook crashes" in body
+    assert "#2 Receiver fails" in body and "confirmed by the AI check" in body
+    assert "#3" not in body
+
+
+def test_clear_duplicates_skip_the_queue():
+    class Queue:
+        def submit(self, job):
+            raise AssertionError("nothing borderline to check")
+
+    gh = FakeGitHub(issues=[{"number": 2, "title": "Reminders posted twice after restart"}])
+    issue_opened(gh, "o/r", {"number": 4, "title": "Reminder posted twice after a restart"},
+                 TideConfig(triage_label=False, auto_label=False), ai=Queue())
+    assert "#2 Reminders posted twice" in gh.calls[1][3]

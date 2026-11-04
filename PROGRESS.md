@@ -179,3 +179,30 @@ The spec is [README.md](README.md). Work follows its [Roadmap](README.md#roadmap
 | B | Payal-Phougat | 226825128+Payal-Phougat@users.noreply.github.com | `ba7890dc6960e8832693797e8a0195a1421a336a` | feat: request reviews from code owners when a PR opens |
 | C | Pranjal2007v | pranjalgangwar910@gmail.com | `9f4c33926f7744e3ac83e02078c91e3bb6ea4201` | feat: label new issues as bug, enhancement, docs or question |
 | D | ishitasharma2490 | ishitasharma2490@gmail.com | `029ee81040033a0dea3529c698d20967626784c8` | feat: link likely duplicate issues using TF-IDF similarity |
+
+## Run 8 (2026-11-04)
+
+**Estimated complete:** 40%
+
+**Added**
+
+- `tidebot/ai.py`: a client for any OpenAI-compatible `/chat/completions` endpoint, set up with `TIDEBOT_AI_URL`, `TIDEBOT_AI_MODEL` and an optional `TIDEBOT_AI_KEY` (local servers often have none). It waits up to 60 seconds for an answer. Timeouts, network errors, 429s, other non-200 answers and unreadable or empty replies all become an `AIError` whose message can go straight into a comment and never includes the key. With no model configured, AI commands reply that they are off.
+- `tidebot/aiqueue.py`, the AI queue from [Architecture](README.md#architecture): one worker thread runs AI jobs in the order they came in, so a small server makes one model call at a time. The webhook answers GitHub at once and each job posts its own reply. When a command has to wait, Tidebot says how many jobs are ahead of it. A job that fails is logged and the queue moves on.
+- `tidebot/aicommands.py`, with the first three [AI commands](README.md#ai-commands-14). `/ask <question>` answers from the issue or PR's title and description (without a question it replies with the usage). `/summarize` reads the whole thread, leaves out bot comments and drops the oldest comments first when the thread is too long. `/explain` describes a PR's change from its diff, or an issue in plain words, and text after it narrows the focus. Context sent to the model is capped at 8000 characters. The other AI commands are still accepted and do nothing yet.
+- The AI check on borderline duplicates. When a model is configured, open issues scoring 0.3 to 0.5 against a new issue are sent to the model in pairs on the AI queue, and only the ones it calls the same report are added to the reply, marked "confirmed by the AI check". If nothing is borderline, or there is no model, the reply goes out at once as before. A model error counts as "not the same".
+
+**Next 5%**
+
+- The review pipeline from [How code review works](README.md#how-code-review-works), step one: read the PR thread into a short memo, list the changed files and skip lockfiles and generated code.
+- Step two: review each file on its own, four at a time, and collect findings as structured suggestions (path, line range, replacement).
+- Step three: check each suggestion against the real lines of the file and drop any that don't apply cleanly.
+- `/review` on top of it: up to 12 findings summarized in one comment. Inline suggested changes for `/review-sc` come after.
+
+**Blockers:** none. Still not run against a live GitHub App or a real model endpoint; API and model calls are covered by mocked tests.
+
+| Commit | GitHub | Email | SHA | Message |
+|---|---|---|---|---|
+| A | Payal-Phougat | 226825128+Payal-Phougat@users.noreply.github.com | `93717c7eee073f66e1d3ea34b2f2273c6926ad83` | feat: add a client for OpenAI-compatible chat models |
+| B | Pranjal2007v | pranjalgangwar910@gmail.com | `d1149416e6978825768ca4abaa197b60f944bae6` | feat: queue AI commands and answer /ask from the issue context |
+| C | ishitasharma2490 | ishitasharma2490@gmail.com | `c3754784bcbcda19f4394d816c8aa872345120f2` | feat: add /summarize and /explain for issue and PR threads |
+| D | bitflicker64 | himnshuverma10152006@gmail.com | *(this commit, filled in next run)* | feat: check borderline duplicate matches with the AI model |

@@ -10,8 +10,9 @@ from __future__ import annotations
 import re
 from typing import List, Optional
 
+from .aiqueue import AIQueue
 from .config import TideConfig
-from .duplicates import duplicates_comment, find_duplicates, tokens
+from .duplicates import confirm_borderline, duplicates_comment, split_matches, tokens
 from .github import GitHubClient, GitHubError
 from .help import welcome_text
 from .labeler import classify, pick_labels
@@ -108,8 +109,9 @@ def label_size(gh: GitHubClient, repo: str, pr: dict) -> None:
         gh.add_labels(repo, pr["number"], [wanted])
 
 
-def issue_opened(gh: GitHubClient, repo: str, issue: dict, config: TideConfig) -> None:
-    """Label a new issue by content and mark it for triage, per the config."""
+def issue_opened(gh: GitHubClient, repo: str, issue: dict, config: TideConfig,
+                 ai: Optional[AIQueue] = None) -> None:
+    """Label a new issue by content, mark it for triage and look for duplicates."""
     labels: List[str] = []
     if config.triage_label:
         labels.append(TRIAGE_LABEL)
@@ -118,19 +120,33 @@ def issue_opened(gh: GitHubClient, repo: str, issue: dict, config: TideConfig) -
     if labels:
         gh.add_labels(repo, issue["number"], labels)
     if config.duplicate_check:
-        report_duplicates(gh, repo, issue)
+        report_duplicates(gh, repo, issue, ai)
 
 
-def report_duplicates(gh: GitHubClient, repo: str, issue: dict) -> None:
-    """Reply with open issues that look like the same report; never close anything."""
+def report_duplicates(gh: GitHubClient, repo: str, issue: dict,
+                      ai: Optional[AIQueue] = None) -> None:
+    """Reply with open issues that look like the same report; never close anything.
+
+    With a model configured, borderline matches are checked on the AI queue
+    and the one reply is posted from there, so the webhook isn't held up.
+    """
     if is_bot((issue.get("user") or {}).get("login", "")):
         return
     # An issue with no words to compare can't match, so skip the API read.
     if not tokens(issue.get("title"), issue.get("body")):
         return
-    reply = duplicates_comment(find_duplicates(issue, gh.open_issues(repo)))
-    if reply:
-        gh.post_comment(repo, issue["number"], reply)
+    others = gh.open_issues(repo)
+    strong, borderline = split_matches(issue, others)
+
+    def post(matches) -> None:
+        reply = duplicates_comment(matches)
+        if reply:
+            gh.post_comment(repo, issue["number"], reply)
+
+    if ai is None or not borderline:
+        post(strong)
+        return
+    ai.submit(lambda model: post(confirm_borderline(model, issue, others, strong, borderline)))
 
 
 def content_labels(gh: GitHubClient, repo: str, issue: dict) -> List[str]:
