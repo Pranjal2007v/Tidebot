@@ -7,7 +7,8 @@ file on its own, four at a time, and collects the model's findings as
 ``Suggestion`` objects: a path, a line range on the new side of the diff, the
 lines as the model read them and their replacement. ``verify`` checks each
 suggestion against the real lines of the file at the PR's head commit and
-drops any that don't apply cleanly.
+drops any that don't apply cleanly. ``format_review`` writes what is left
+into the one comment ``/review`` posts.
 """
 
 from __future__ import annotations
@@ -31,6 +32,8 @@ WORKERS = 4
 # Characters of numbered diff sent for one file.
 MAX_FILE_CONTEXT = 6000
 FILE_TOKENS = 1200
+# Findings shown in the review comment; the rest are only counted.
+MAX_FINDINGS = 12
 
 # Files that tools rewrite; nobody reviews them by hand.
 LOCKFILES = {
@@ -282,3 +285,40 @@ def verify(gh: GitHubClient, repo: str, sha: str, files: List[ChangedFile],
         if text is not None and check(s, text.splitlines(), hunks(patches.get(s.path, ""))) is None:
             kept.append(s)
     return kept, len(suggestions) - len(kept)
+
+
+def _plural(n: int, word: str) -> str:
+    return f"{n} {word}" if n == 1 else f"{n} {word}s"
+
+
+def _finding(n: int, s: Suggestion) -> str:
+    where = f"line {s.start}" if s.start == s.end else f"lines {s.start}-{s.end}"
+    diff = [f"-{line}" for line in s.original.split("\n")]
+    diff += [f"+{line}" for line in s.replacement.split("\n")] if s.replacement else []
+    head = f"{n}. `{s.path}` {where}" + (f": {s.note}" if s.note else "")
+    return head + "\n\n````diff\n" + "\n".join(diff) + "\n````"
+
+
+def format_review(memo: str, kept: List[Suggestion], reviews: List[FileReview],
+                  skipped: List[Tuple[str, str]], dropped: int) -> str:
+    """The ``/review`` comment: the memo, up to ``MAX_FINDINGS`` findings and a tally."""
+    parts = [f"**What this PR does:** {memo.strip()}"]
+    if kept:
+        parts.append("**Findings**")
+        parts += [_finding(n, s) for n, s in enumerate(kept[:MAX_FINDINGS], 1)]
+        if len(kept) > MAX_FINDINGS:
+            more = len(kept) - MAX_FINDINGS
+            parts.append(f"{_plural(more, 'more finding')} not shown.")
+    else:
+        parts.append("No problems found in the reviewed files.")
+    tally = [f"Reviewed {_plural(len(reviews), 'file')}."]
+    failed = [r for r in reviews if r.error]
+    if failed:
+        tally.append("Could not review: " + ", ".join(f"`{r.path}` ({r.error})" for r in failed)
+                     + ".")
+    if skipped:
+        tally.append("Skipped: " + ", ".join(f"`{p}` ({why})" for p, why in skipped) + ".")
+    if dropped:
+        tally.append(f"Dropped {_plural(dropped, 'suggestion')} that didn't match the file.")
+    parts.append(" ".join(tally))
+    return "\n\n".join(parts)

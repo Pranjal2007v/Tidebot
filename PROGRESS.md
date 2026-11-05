@@ -206,3 +206,29 @@ The spec is [README.md](README.md). Work follows its [Roadmap](README.md#roadmap
 | B | Pranjal2007v | pranjalgangwar910@gmail.com | `d1149416e6978825768ca4abaa197b60f944bae6` | feat: queue AI commands and answer /ask from the issue context |
 | C | ishitasharma2490 | ishitasharma2490@gmail.com | `c3754784bcbcda19f4394d816c8aa872345120f2` | feat: add /summarize and /explain for issue and PR threads |
 | D | bitflicker64 | himnshuverma10152006@gmail.com | `30331148ac0db260d3167f06ad9a6ff8aa27519a` | feat: check borderline duplicate matches with the AI model |
+
+## Run 9 (2026-11-05)
+
+**Estimated complete:** 45%
+
+**Added**
+
+- `tidebot/review.py`, the pipeline from [How code review works](README.md#how-code-review-works). Step one: `write_memo` turns the PR thread (the same bot-free, newest-first text `/summarize` uses) into a memo of three to five sentences, and `pick_files` drops removed files, lockfiles (`package-lock.json`, `go.sum`, `poetry.lock` and others), generated code (`.min.js`, `_pb2.py`, `vendor/`, `dist/`, or a `Code generated ... DO NOT EDIT` style marker at the top of the file) and files GitHub sends no diff for. At most 30 files are reviewed; the rest are listed as over the limit. New client method `pull_changes` returns the PR's files with their patches.
+- Step two: each file goes to the model on its own, four at a time inside the one queued review job, with the memo and its diff numbered by new-file line. The model answers with a JSON array of findings (start and end line, the lines as it read them, the replacement and a short note), which becomes `Suggestion` objects. Fences and text around the array are ignored and malformed items are dropped. A model error marks only that file as not reviewed.
+- Step three: `verify` reads each file once at the PR's head commit (`fetch_file` now takes a `ref`) and keeps a suggestion only when its lines sit inside one hunk of the diff, the quoted lines equal the file's real lines (trailing spaces ignored), the replacement changes something and holds no code fence.
+- `/review` on a PR runs the three steps and posts one comment: the memo, up to 12 findings each shown as a `diff` block, a count of findings not shown, and a tally of files reviewed, files that failed or were skipped and suggestions dropped. On an issue it says it works on PRs only.
+
+**Next 5%**
+
+- `/review-sc`: post the verified findings as inline suggested changes in one PR review (up to 12, the rest summarized in the review body), per step 4 of [How code review works](README.md#how-code-review-works).
+- `/security` and `/perf`: the same per-file pipeline with a focused prompt.
+- `/docs` and `/test`: suggest missing docs or tests for the PR's changes.
+
+**Blockers:** none. Still not run against a live GitHub App or a real model endpoint; API and model calls are covered by mocked tests.
+
+| Commit | GitHub | Email | SHA | Message |
+|---|---|---|---|---|
+| A | Pranjal2007v | pranjalgangwar910@gmail.com | `9e71ccd6656800371977fd7b20a15fc81573d48d` | feat: memo the PR thread and pick which changed files to review |
+| B | ishitasharma2490 | ishitasharma2490@gmail.com | `f2d97300ae3bf320d8b68249b657c30c8ec8ffd1` | feat: review changed files four at a time into line suggestions |
+| C | bitflicker64 | himnshuverma10152006@gmail.com | `cd8a731efabf1098d9a69ebe301ef3e996333b38` | feat: drop review suggestions that do not match the real file lines |
+| D | Payal-Phougat | 226825128+Payal-Phougat@users.noreply.github.com | *(this commit, filled in next run)* | feat: add /review with up to 12 verified findings in one comment |

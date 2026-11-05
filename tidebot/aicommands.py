@@ -15,6 +15,7 @@ from .ai import AIClient, AIError
 from .aiqueue import Job
 from .commands import Command
 from .github import GitHubClient, GitHubError
+from .review import ChangedFile, format_review, pick_files, review_files, verify, write_memo
 from .router import is_bot
 from .workflow import Target
 
@@ -118,10 +119,29 @@ def _explain(gh: GitHubClient, ai: AIClient, t: Target, args: str) -> str:
     return ai.ask(_system(t.repo, task), context)
 
 
+def _review(gh: GitHubClient, ai: AIClient, t: Target, args: str) -> str:
+    """Run the review pipeline from the README's "How code review works"."""
+    if not t.is_pr:
+        return "`/review` works on pull requests only."
+    sha = gh.pull(t.repo, t.number)["head"]["sha"]
+    files = [ChangedFile.from_api(f) for f in gh.pull_changes(t.repo, t.number)]
+    to_review, skipped = pick_files(files)
+    if not to_review:
+        return "Nothing to review: every changed file is a lockfile, generated, removed or binary."
+    thread = thread_text(gh.issue(t.repo, t.number), gh.issue_comments(t.repo, t.number),
+                         True, t.number)
+    memo = write_memo(ai, t.repo, thread)
+    reviews = review_files(ai, t.repo, memo, to_review)
+    found = [s for r in reviews for s in r.suggestions]
+    kept, dropped = verify(gh, t.repo, sha, to_review, found)
+    return format_review(memo, kept, reviews, skipped, dropped)
+
+
 AI_HANDLERS: Dict[str, AICommand] = {
     "ask": AICommand(_ask, "Usage: `:tide /ask where is auth handled?`"),
     "summarize": AICommand(_summarize),
     "explain": AICommand(_explain),
+    "review": AICommand(_review),
 }
 
 

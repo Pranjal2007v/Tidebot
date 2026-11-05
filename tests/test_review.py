@@ -4,8 +4,8 @@ import time
 from tidebot.ai import AIError
 from tidebot.github import GitHubError
 from tidebot.review import (ChangedFile, FileReview, Hunk, Suggestion, check, hunks, numbered,
-                            parse_findings, pick_files, review_file, review_files,
-                            skip_reason, verify, write_memo)
+                            format_review, parse_findings, pick_files, review_file,
+                            review_files, skip_reason, verify, write_memo)
 
 PATCH = "@@ -1,2 +1,3 @@\n import os\n+import sys\n x = 1"
 
@@ -200,3 +200,25 @@ def test_verify_reads_each_file_once_at_the_head_commit():
              suggestion(2, 2, "x = 2", path="c.py")]
     assert verify(gh, "o/r", "abc", files, found) == ([good], 3)
     assert gh.reads == [("o/r", "a.py", "abc"), ("o/r", "b.py", "abc"), ("o/r", "c.py", "abc")]
+
+
+def test_format_review_shows_findings_as_diffs_and_a_tally():
+    kept = [Suggestion("a.py", 2, 2, "x = 2", "x = 3", "Off by one."),
+            Suggestion("a.py", 20, 21, "def f():\n    pass", "", "")]
+    reviews = [FileReview("a.py", kept), FileReview("b.py", [], "the model took too long to answer")]
+    text = format_review("It bumps x.\n", kept, reviews, [("yarn.lock", "lockfile")], 1)
+    assert text == (
+        "**What this PR does:** It bumps x.\n\n"
+        "**Findings**\n\n"
+        "1. `a.py` line 2: Off by one.\n\n````diff\n-x = 2\n+x = 3\n````\n\n"
+        "2. `a.py` lines 20-21\n\n````diff\n-def f():\n-    pass\n````\n\n"
+        "Reviewed 2 files. Could not review: `b.py` (the model took too long to answer). "
+        "Skipped: `yarn.lock` (lockfile). Dropped 1 suggestion that didn't match the file.")
+
+
+def test_format_review_caps_findings_at_twelve():
+    kept = [Suggestion("a.py", n, n, "a", "b", "") for n in range(1, 16)]
+    text = format_review("memo", kept, [FileReview("a.py", kept)], [], 0)
+    assert "12. `a.py` line 12" in text and "13. " not in text
+    assert text.endswith("3 more findings not shown.\n\nReviewed 1 file.")
+    assert "No problems found" in format_review("memo", [], [FileReview("a.py", [])], [], 0)

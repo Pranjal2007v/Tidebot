@@ -136,3 +136,62 @@ def test_explain_an_issue_needs_no_diff():
     assert ("pull_diff", "o/r", 4) not in gh.calls
     assert "plain words" in ai.prompts[0][0]
     assert usage_error(Command("explain")) is None
+
+
+class ReviewGitHub(FakeGitHub):
+    def __init__(self, changes, files):
+        super().__init__({"title": "Bump x", "body": "Fixes the counter.", "user": {"login": "alice"}})
+        self.changes = changes
+        self.files = files
+
+    def pull(self, repo, number):
+        return {"head": {"sha": "abc"}}
+
+    def pull_changes(self, repo, number):
+        return self.changes
+
+    def fetch_file(self, repo, path, ref=None):
+        self.calls.append(("fetch_file", path, ref))
+        return self.files.get(path)
+
+
+class ReviewAI:
+    def __init__(self, findings):
+        self.findings = findings
+        self.prompts = []
+
+    def ask(self, system, user, **kwargs):
+        self.prompts.append(user)
+        if "memo" in system:
+            return "It bumps x."
+        return self.findings
+
+
+PR = Target("o/r", 5, True, "alice", 99)
+
+
+def test_review_posts_verified_findings_on_a_pr():
+    changes = [{"filename": "a.py", "status": "modified",
+                "patch": "@@ -1,2 +1,2 @@\n import os\n-x = 1\n+x = 2"},
+               {"filename": "yarn.lock", "status": "modified", "patch": "@@ -1 +1 @@\n-a\n+b"}]
+    gh = ReviewGitHub(changes, {"a.py": "import os\nx = 2\n"})
+    ai = ReviewAI('[{"start": 2, "original": "x = 2", "replacement": "x = 3", "note": "Too low."},'
+                  ' {"start": 2, "original": "y = 2", "replacement": "y = 3"}]')
+    body = run(gh, ai, "review", PR)[3]
+    assert body.startswith("`/review` for @alice:\n\n**What this PR does:** It bumps x.")
+    assert "1. `a.py` line 2: Too low.\n\n````diff\n-x = 2\n+x = 3\n````" in body
+    assert body.endswith("Reviewed 1 file. Skipped: `yarn.lock` (lockfile). "
+                         "Dropped 1 suggestion that didn't match the file.")
+    assert ("fetch_file", "a.py", "abc") in gh.calls
+    assert ai.prompts[0].startswith("Pull request #5 by @alice: Bump x")
+    assert "It bumps x." in ai.prompts[1] and "File: a.py" in ai.prompts[1]
+
+
+def test_review_needs_a_pr_and_something_to_review():
+    gh = ReviewGitHub([], {})
+    assert run(gh, ReviewAI("[]"), "review")[3].endswith("`/review` works on pull requests only.")
+    gh = ReviewGitHub([{"filename": "go.sum", "patch": "@@ -1 +1 @@\n-a\n+b"}], {})
+    ai = ReviewAI("[]")
+    assert run(gh, ai, "review", PR)[3].endswith("Nothing to review: every changed file is a "
+                                                 "lockfile, generated, removed or binary.")
+    assert ai.prompts == []
