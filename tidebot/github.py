@@ -289,8 +289,12 @@ class GitHubClient:
                 return False
         return False
 
-    def fetch_file(self, repo: str, path: str) -> Optional[str]:
-        """Return the text of ``path`` on the default branch, or None if it's missing."""
+    def fetch_file(self, repo: str, path: str, ref: Optional[str] = None) -> Optional[str]:
+        """Return the text of ``path`` at ``ref``, or None if it's missing.
+
+        Without a ``ref`` GitHub reads the default branch.
+        """
         res = self._request("GET", f"/repos/{repo}/contents/{path}", ok=(200, 404),
-                            accept="application/vnd.github.raw+json")
+                            accept="application/vnd.github.raw+json",
+                            params={"ref": ref} if ref else None)
         return None if res.status_code == 404 else res.text

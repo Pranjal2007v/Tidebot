@@ -77,6 +77,10 @@ def test_fetch_file():
     calls, gh = client(lambda r: httpx.Response(200, text="star_gate: true\n"))
     assert gh.fetch_file("o/r", ".tide.yml") == "star_gate: true\n"
     assert calls[0].headers["Accept"] == "application/vnd.github.raw+json"
+    assert "ref" not in calls[0].url.params
+    gh.fetch_file("o/r", "src/a.py", ref="abc123")
+    assert calls[1].url.path == "/repos/o/r/contents/src/a.py"
+    assert calls[1].url.params["ref"] == "abc123"
     _, missing = client(lambda r: httpx.Response(404))
     assert missing.fetch_file("o/r", ".tide.yml") is None
 

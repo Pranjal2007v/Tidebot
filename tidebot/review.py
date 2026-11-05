@@ -5,7 +5,9 @@ trying to do, and ``pick_files`` lists the changed files worth reviewing,
 leaving out lockfiles and generated code. ``review_files`` then reviews each
 file on its own, four at a time, and collects the model's findings as
 ``Suggestion`` objects: a path, a line range on the new side of the diff, the
-lines as the model read them and their replacement.
+lines as the model read them and their replacement. ``verify`` checks each
+suggestion against the real lines of the file at the PR's head commit and
+drops any that don't apply cleanly.
 """
 
 from __future__ import annotations
@@ -15,9 +17,10 @@ import posixpath
 import re
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
-from typing import List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 from .ai import AIClient, AIError
+from .github import GitHubClient, GitHubError
 
 # Most files one review looks at; each one costs a model call.
 MAX_FILES = 30
@@ -233,3 +236,49 @@ def review_files(ai: AIClient, repo: str, memo: str, files: List[ChangedFile],
         return []
     with ThreadPoolExecutor(max_workers=workers) as pool:
         return list(pool.map(lambda f: review_file(ai, repo, memo, f), files))
+
+
+def _lines(text: str) -> List[str]:
+    return [line.rstrip() for line in text.splitlines()]
+
+
+def check(s: Suggestion, file_lines: List[str], file_hunks: List[Hunk]) -> Optional[str]:
+    """Why ``s`` doesn't apply cleanly to the file, or None when it does.
+
+    GitHub only takes suggestions on lines inside one hunk of the diff, and
+    the lines the model quoted must be the file's real lines; trailing
+    spaces are ignored.
+    """
+    if not any(h.start <= s.start and s.end <= h.end for h in file_hunks):
+        return "outside the diff"
+    if s.end > len(file_lines):
+        return "past the end of the file"
+    if _lines(s.original) != [line.rstrip() for line in file_lines[s.start - 1:s.end]]:
+        return "doesn't match the file"
+    if _lines(s.replacement) == _lines(s.original):
+        return "changes nothing"
+    if "```" in s.replacement:
+        return "can't be shown as a suggestion"
+    return None
+
+
+def verify(gh: GitHubClient, repo: str, sha: str, files: List[ChangedFile],
+           suggestions: List[Suggestion]) -> Tuple[List[Suggestion], int]:
+    """The suggestions that apply cleanly at ``sha``, and how many were dropped.
+
+    Each file is read once. A file GitHub can't return drops every
+    suggestion on it.
+    """
+    patches = {f.path: f.patch for f in files}
+    texts: Dict[str, Optional[str]] = {}
+    kept: List[Suggestion] = []
+    for s in suggestions:
+        if s.path not in texts:
+            try:
+                texts[s.path] = gh.fetch_file(repo, s.path, ref=sha)
+            except GitHubError:
+                texts[s.path] = None
+        text = texts[s.path]
+        if text is not None and check(s, text.splitlines(), hunks(patches.get(s.path, ""))) is None:
+            kept.append(s)
+    return kept, len(suggestions) - len(kept)

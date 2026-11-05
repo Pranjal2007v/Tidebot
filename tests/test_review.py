@@ -2,9 +2,10 @@ import threading
 import time
 
 from tidebot.ai import AIError
-from tidebot.review import (ChangedFile, FileReview, Hunk, Suggestion, hunks, numbered,
+from tidebot.github import GitHubError
+from tidebot.review import (ChangedFile, FileReview, Hunk, Suggestion, check, hunks, numbered,
                             parse_findings, pick_files, review_file, review_files,
-                            skip_reason, write_memo)
+                            skip_reason, verify, write_memo)
 
 PATCH = "@@ -1,2 +1,3 @@\n import os\n+import sys\n x = 1"
 
@@ -151,3 +152,51 @@ def test_review_files_runs_four_at_a_time_in_order():
     assert [r.path for r in results] == [f.path for f in files]
     assert 1 < peak[0] <= 4
     assert review_files(SlowAI(), "o/r", "memo", []) == []
+
+
+FILE = ["import os", "x = 2", "y = 3  "] + [""] * 16 + ["def f():", "    pass", "    return 1"]
+FILE_HUNKS = [Hunk(1, 3), Hunk(20, 22)]
+
+
+def suggestion(start, end, original, replacement="z = 0", path="a.py"):
+    return Suggestion(path, start, end, original, replacement, "")
+
+
+def test_check_accepts_a_suggestion_that_matches_the_file():
+    assert check(suggestion(2, 3, "x = 2\ny = 3"), FILE, FILE_HUNKS) is None
+    assert check(suggestion(21, 21, "    pass", ""), FILE, FILE_HUNKS) is None
+
+
+def test_check_drops_suggestions_that_dont_apply():
+    assert check(suggestion(10, 10, ""), FILE, FILE_HUNKS) == "outside the diff"
+    assert check(suggestion(3, 20, "y = 3"), FILE, FILE_HUNKS) == "outside the diff"
+    assert check(suggestion(22, 22, "x"), FILE[:21], FILE_HUNKS) == "past the end of the file"
+    assert check(suggestion(2, 2, "x = 1"), FILE, FILE_HUNKS) == "doesn't match the file"
+    assert check(suggestion(2, 3, "x = 2"), FILE, FILE_HUNKS) == "doesn't match the file"
+    assert check(suggestion(2, 2, "x = 2", "x = 2  "), FILE, FILE_HUNKS) == "changes nothing"
+    assert (check(suggestion(2, 2, "x = 2", "```\nx"), FILE, FILE_HUNKS)
+            == "can't be shown as a suggestion")
+
+
+class FileGitHub:
+    def __init__(self, files):
+        self.files = files
+        self.reads = []
+
+    def fetch_file(self, repo, path, ref=None):
+        self.reads.append((repo, path, ref))
+        content = self.files.get(path)
+        if isinstance(content, Exception):
+            raise content
+        return content
+
+
+def test_verify_reads_each_file_once_at_the_head_commit():
+    gh = FileGitHub({"a.py": "\n".join(FILE) + "\n", "b.py": GitHubError(500, "oops")})
+    files = [changed("a.py", patch=TWO_HUNKS), changed("b.py", patch=TWO_HUNKS),
+             changed("c.py", patch=TWO_HUNKS)]
+    good = suggestion(2, 2, "x = 2")
+    found = [good, suggestion(2, 2, "x = 9"), suggestion(2, 2, "x = 2", path="b.py"),
+             suggestion(2, 2, "x = 2", path="c.py")]
+    assert verify(gh, "o/r", "abc", files, found) == ([good], 3)
+    assert gh.reads == [("o/r", "a.py", "abc"), ("o/r", "b.py", "abc"), ("o/r", "c.py", "abc")]
