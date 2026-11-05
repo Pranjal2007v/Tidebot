@@ -174,18 +174,24 @@ class GitHubClient:
             body["team_reviewers"] = list(teams)
         self._request("POST", f"/repos/{repo}/pulls/{number}/requested_reviewers", json=body)
 
-    def pull_files(self, repo: str, number: int) -> List[str]:
-        """Return the paths a PR changes; a rename counts its old path too."""
-        paths: List[str] = []
+    def pull_changes(self, repo: str, number: int) -> List[dict]:
+        """Return a PR's changed files as GitHub lists them, patches included."""
+        changes: List[dict] = []
         for page in range(1, _FILE_PAGES + 1):
             files = self._request("GET", f"/repos/{repo}/pulls/{number}/files",
                                   params={"per_page": 100, "page": page}).json()
-            for f in files:
-                paths.append(f["filename"])
-                if f.get("previous_filename"):
-                    paths.append(f["previous_filename"])
+            changes += files
             if len(files) < 100:
                 break
+        return changes
+
+    def pull_files(self, repo: str, number: int) -> List[str]:
+        """Return the paths a PR changes; a rename counts its old path too."""
+        paths: List[str] = []
+        for f in self.pull_changes(repo, number):
+            paths.append(f["filename"])
+            if f.get("previous_filename"):
+                paths.append(f["previous_filename"])
         return paths
 
     def issue(self, repo: str, number: int) -> dict:

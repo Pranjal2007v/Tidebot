@@ -205,4 +205,4 @@ The spec is [README.md](README.md). Work follows its [Roadmap](README.md#roadmap
 | A | Payal-Phougat | 226825128+Payal-Phougat@users.noreply.github.com | `93717c7eee073f66e1d3ea34b2f2273c6926ad83` | feat: add a client for OpenAI-compatible chat models |
 | B | Pranjal2007v | pranjalgangwar910@gmail.com | `d1149416e6978825768ca4abaa197b60f944bae6` | feat: queue AI commands and answer /ask from the issue context |
 | C | ishitasharma2490 | ishitasharma2490@gmail.com | `c3754784bcbcda19f4394d816c8aa872345120f2` | feat: add /summarize and /explain for issue and PR threads |
-| D | bitflicker64 | himnshuverma10152006@gmail.com | *(this commit, filled in next run)* | feat: check borderline duplicate matches with the AI model |
+| D | bitflicker64 | himnshuverma10152006@gmail.com | `30331148ac0db260d3167f06ad9a6ff8aa27519a` | feat: check borderline duplicate matches with the AI model |

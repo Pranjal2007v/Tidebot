@@ -241,3 +241,16 @@ def test_pull_diff_asks_for_the_diff_and_handles_too_large():
     assert calls[0].headers["Accept"] == "application/vnd.github.diff"
     _, gh = client(lambda r: httpx.Response(406, text="too large"))
     assert gh.pull_diff("o/r", 5) == ""
+
+
+def test_pull_changes_keeps_patches_and_pages():
+    def handler(request):
+        page = int(request.url.params["page"])
+        if page == 1:
+            return httpx.Response(200, json=[{"filename": f"f{i}", "patch": "@@"} for i in range(100)])
+        return httpx.Response(200, json=[{"filename": "last", "status": "added", "patch": "+x"}])
+
+    calls, gh = client(handler)
+    changes = gh.pull_changes("o/r", 3)
+    assert len(calls) == 2 and len(changes) == 101
+    assert changes[-1] == {"filename": "last", "status": "added", "patch": "+x"}
