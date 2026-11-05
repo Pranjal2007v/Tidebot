@@ -1,4 +1,10 @@
-from tidebot.review import ChangedFile, pick_files, skip_reason, write_memo
+import threading
+import time
+
+from tidebot.ai import AIError
+from tidebot.review import (ChangedFile, FileReview, Hunk, Suggestion, hunks, numbered,
+                            parse_findings, pick_files, review_file, review_files,
+                            skip_reason, write_memo)
 
 PATCH = "@@ -1,2 +1,3 @@\n import os\n+import sys\n x = 1"
 
@@ -51,3 +57,97 @@ def test_write_memo_sends_the_thread():
     assert "o/r" in system and "memo" in system
     assert user == "Pull request #3: Add retries"
     assert kwargs == {"max_tokens": 300}
+
+
+TWO_HUNKS = ("@@ -1,3 +1,3 @@\n import os\n-x = 1\n+x = 2\n y = 3\n"
+             "@@ -20,2 +20,3 @@\n def f():\n+    pass\n     return 1\n\\ No newline at end of file")
+
+
+def test_hunks_give_new_side_ranges():
+    assert hunks(TWO_HUNKS) == [Hunk(1, 3), Hunk(20, 22)]
+    assert hunks("@@ -5,2 +4,0 @@\n-a\n-b") == []
+    assert hunks("@@ -1 +1 @@\n-a\n+b") == [Hunk(1, 1)]
+
+
+def test_numbered_marks_new_side_lines():
+    lines = numbered(TWO_HUNKS).splitlines()
+    assert lines[0] == "@@ -1,3 +1,3 @@"
+    assert lines[1] == "     1  import os"
+    assert lines[2] == "       -x = 1"
+    assert lines[3] == "     2 +x = 2"
+    assert lines[4] == "     3  y = 3"
+    assert lines[-1] == "    22      return 1"
+
+
+def test_parse_findings_reads_a_fenced_json_array():
+    answer = ('Here you go:\n```json\n[{"start": 2, "end": 2, "original": "x = 2\\n", '
+              '"replacement": "x = 3", "note": "Off by one."}]\n```')
+    assert parse_findings("a.py", answer) == [Suggestion("a.py", 2, 2, "x = 2", "x = 3", "Off by one.")]
+
+
+def test_parse_findings_drops_bad_items():
+    answer = """[
+        {"start": 3, "original": "y", "replacement": ""},
+        {"start": 0, "end": 1, "original": "a", "replacement": "b"},
+        {"start": 5, "end": 4, "original": "a", "replacement": "b"},
+        {"start": true, "end": 1, "original": "a", "replacement": "b"},
+        {"start": "2", "original": "a", "replacement": "b"},
+        {"start": 2, "replacement": "b"},
+        "not an object"
+    ]"""
+    assert parse_findings("a.py", answer) == [Suggestion("a.py", 3, 3, "y", "", "")]
+    assert parse_findings("a.py", "Looks good to me!") == []
+    assert parse_findings("a.py", "[not json]") == []
+    assert parse_findings("a.py", '{"start": 1}') == []
+
+
+class ScriptedAI:
+    def __init__(self, answers):
+        self.answers = answers
+        self.prompts = []
+
+    def ask(self, system, user, **kwargs):
+        self.prompts.append((system, user, kwargs))
+        path = user.split("File: ")[1].split("\n")[0]
+        answer = self.answers[path]
+        if isinstance(answer, Exception):
+            raise answer
+        return answer
+
+
+def test_review_file_sends_the_memo_and_numbered_diff():
+    ai = ScriptedAI({"a.py": '[{"start": 2, "original": "x = 2", "replacement": "x = 3"}]'})
+    result = review_file(ai, "o/r", "It bumps x.", changed("a.py", patch=TWO_HUNKS))
+    assert result == FileReview("a.py", [Suggestion("a.py", 2, 2, "x = 2", "x = 3", "")])
+    system, user, kwargs = ai.prompts[0]
+    assert "o/r" in system and "JSON array" in system
+    assert user.startswith("What the PR is for: It bumps x.\n\nFile: a.py\n\n@@ -1,3")
+    assert "     2 +x = 2" in user
+    assert kwargs == {"max_tokens": 1200}
+
+
+def test_a_model_error_marks_only_that_file():
+    ai = ScriptedAI({"a.py": "[]", "b.py": AIError("the model took too long to answer")})
+    results = review_files(ai, "o/r", "memo", [changed("a.py"), changed("b.py")])
+    assert results == [FileReview("a.py", []),
+                       FileReview("b.py", [], "the model took too long to answer")]
+
+
+def test_review_files_runs_four_at_a_time_in_order():
+    running, peak, lock = [0], [0], threading.Lock()
+
+    class SlowAI:
+        def ask(self, system, user, **kwargs):
+            with lock:
+                running[0] += 1
+                peak[0] = max(peak[0], running[0])
+            time.sleep(0.02)
+            with lock:
+                running[0] -= 1
+            return "[]"
+
+    files = [changed(f"f{i}.py") for i in range(10)]
+    results = review_files(SlowAI(), "o/r", "memo", files)
+    assert [r.path for r in results] == [f.path for f in files]
+    assert 1 < peak[0] <= 4
+    assert review_files(SlowAI(), "o/r", "memo", []) == []

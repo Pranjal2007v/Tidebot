@@ -1,22 +1,33 @@
 """The code review pipeline from the README's "How code review works".
 
-Step one lives here so far: ``write_memo`` reads the PR thread into a short
-memo on what the PR is trying to do, and ``pick_files`` lists the changed
-files worth reviewing, leaving out lockfiles and generated code.
+``write_memo`` reads the PR thread into a short memo on what the PR is
+trying to do, and ``pick_files`` lists the changed files worth reviewing,
+leaving out lockfiles and generated code. ``review_files`` then reviews each
+file on its own, four at a time, and collects the model's findings as
+``Suggestion`` objects: a path, a line range on the new side of the diff, the
+lines as the model read them and their replacement.
 """
 
 from __future__ import annotations
 
+import json
 import posixpath
 import re
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from typing import List, Optional, Tuple
 
-from .ai import AIClient
+from .ai import AIClient, AIError
 
 # Most files one review looks at; each one costs a model call.
 MAX_FILES = 30
 MEMO_TOKENS = 300
+# Files reviewed at once, as the README says. This is within one queued
+# review job; the AI queue still runs one job at a time.
+WORKERS = 4
+# Characters of numbered diff sent for one file.
+MAX_FILE_CONTEXT = 6000
+FILE_TOKENS = 1200
 
 # Files that tools rewrite; nobody reviews them by hand.
 LOCKFILES = {
@@ -34,6 +45,7 @@ GENERATED_DIRS = {"dist", "vendor", "node_modules", "third_party", "generated", 
 _GENERATED_MARK = re.compile(r"@generated|code generated .*do not edit|auto-?generated",
                              re.IGNORECASE)
 _FIRST_HUNK = re.compile(r"^@@ -\d+(?:,\d+)? \+1(?:,\d+)? @@")
+_HUNK = re.compile(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@")
 
 
 @dataclass(frozen=True)
@@ -97,3 +109,127 @@ def write_memo(ai: AIClient, repo: str, thread: str) -> str:
         "says about how it should be done or what to avoid. Don't review the code and "
         "don't guess beyond what the thread says.",
         thread, max_tokens=MEMO_TOKENS)
+
+
+@dataclass(frozen=True)
+class Hunk:
+    # First and last line of the hunk on the new side of the diff.
+    start: int
+    end: int
+
+
+@dataclass(frozen=True)
+class Suggestion:
+    path: str
+    start: int
+    end: int
+    # The lines as the model read them, and what should replace them.
+    original: str
+    replacement: str
+    note: str
+
+
+@dataclass(frozen=True)
+class FileReview:
+    path: str
+    suggestions: List[Suggestion]
+    error: Optional[str] = None
+
+
+def hunks(patch: str) -> List[Hunk]:
+    """The new-side line range of every hunk in ``patch``."""
+    found: List[Hunk] = []
+    for line in patch.splitlines():
+        m = _HUNK.match(line)
+        if m:
+            start, count = int(m.group(1)), int(m.group(2) or 1)
+            if count:
+                found.append(Hunk(start, start + count - 1))
+    return found
+
+
+def numbered(patch: str) -> str:
+    """``patch`` with each new-side line prefixed by its line number.
+
+    Removed lines get no number, since a suggestion can't change them.
+    """
+    out: List[str] = []
+    line_no = 0
+    for line in patch.splitlines():
+        m = _HUNK.match(line)
+        if m:
+            line_no = int(m.group(1))
+            out.append(line)
+        elif line.startswith("-"):
+            out.append(f"{'':>6} {line}")
+        elif line.startswith("\\"):
+            continue
+        else:
+            out.append(f"{line_no:>6} {line}")
+            line_no += 1
+    return "\n".join(out)
+
+
+def _text(value: object) -> Optional[str]:
+    return value.rstrip("\n") if isinstance(value, str) else None
+
+
+def parse_findings(path: str, answer: str) -> List[Suggestion]:
+    """The suggestions in a model answer that should be a JSON array.
+
+    Code fences and text around the array are ignored, and items missing a
+    field or with nonsense line numbers are dropped.
+    """
+    first, last = answer.find("["), answer.rfind("]")
+    if first < 0 or last < first:
+        return []
+    try:
+        items = json.loads(answer[first:last + 1])
+    except ValueError:
+        return []
+    found: List[Suggestion] = []
+    for item in items if isinstance(items, list) else []:
+        if not isinstance(item, dict):
+            continue
+        start, end = item.get("start"), item.get("end", item.get("start"))
+        original, replacement = _text(item.get("original")), _text(item.get("replacement"))
+        note = _text(item.get("note")) or ""
+        if (any(not isinstance(n, int) or isinstance(n, bool) for n in (start, end))
+                or start < 1 or end < start or original is None or replacement is None):
+            continue
+        found.append(Suggestion(path, start, end, original, replacement, note.strip()))
+    return found
+
+
+_FILE_TASK = (
+    "You are Tidebot, reviewing one file of a pull request to the GitHub repository {repo}. "
+    "Look for real problems only: bugs, security holes, wrong error handling, clear "
+    "mistakes. Skip style nits. Each line of the diff starts with its line number in the "
+    "new file; removed lines have none and can't be changed. Reply with only a JSON array, "
+    "one object per problem: {{\"start\": first line, \"end\": last line, \"original\": "
+    "the exact current text of those lines, \"replacement\": the text that should replace "
+    "them, \"note\": one sentence on why}}. Reply [] when nothing needs to change."
+)
+
+
+def review_file(ai: AIClient, repo: str, memo: str, f: ChangedFile) -> FileReview:
+    """Ask the model about one file and collect its suggestions."""
+    diff = numbered(f.patch)
+    if len(diff) > MAX_FILE_CONTEXT:
+        diff = diff[:MAX_FILE_CONTEXT] + "\n[...cut for length]"
+    try:
+        answer = ai.ask(_FILE_TASK.format(repo=repo),
+                        f"What the PR is for: {memo}\n\nFile: {f.path}\n\n{diff}",
+                        max_tokens=FILE_TOKENS)
+    except AIError as err:
+        return FileReview(f.path, [], str(err))
+    return FileReview(f.path, parse_findings(f.path, answer))
+
+
+def review_files(ai: AIClient, repo: str, memo: str, files: List[ChangedFile],
+                 workers: int = WORKERS) -> List[FileReview]:
+    """Review every file in ``files``, ``workers`` at a time, in the same order."""
+    if not files:
+        return []
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        return list(pool.map(lambda f: review_file(ai, repo, memo, f), files))
