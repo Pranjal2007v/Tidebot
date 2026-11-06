@@ -258,3 +258,13 @@ def test_pull_changes_keeps_patches_and_pages():
     changes = gh.pull_changes("o/r", 3)
     assert len(calls) == 2 and len(changes) == 101
     assert changes[-1] == {"filename": "last", "status": "added", "patch": "+x"}
+
+
+def test_post_review_sends_inline_comments_at_the_commit():
+    calls, gh = client(lambda r: httpx.Response(200, json={}))
+    comments = [{"path": "a.py", "line": 2, "side": "RIGHT", "body": "x"}]
+    gh.post_review("o/r", 5, "abc", "Summary", comments)
+    req = calls[0]
+    assert req.method == "POST" and req.url.path == "/repos/o/r/pulls/5/reviews"
+    assert json.loads(req.content) == {"commit_id": "abc", "event": "COMMENT",
+                                       "body": "Summary", "comments": comments}

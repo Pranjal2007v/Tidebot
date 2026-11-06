@@ -4,7 +4,8 @@ import time
 from tidebot.ai import AIError
 from tidebot.github import GitHubError
 from tidebot.review import (ChangedFile, FileReview, Hunk, Suggestion, check, hunks, numbered,
-                            format_review, parse_findings, pick_files, review_file,
+                            format_review, format_review_body, inline_comment,
+                            parse_findings, pick_files, review_file,
                             review_files, skip_reason, verify, write_memo)
 
 PATCH = "@@ -1,2 +1,3 @@\n import os\n+import sys\n x = 1"
@@ -222,3 +223,21 @@ def test_format_review_caps_findings_at_twelve():
     assert "12. `a.py` line 12" in text and "13. " not in text
     assert text.endswith("3 more findings not shown.\n\nReviewed 1 file.")
     assert "No problems found" in format_review("memo", [], [FileReview("a.py", [])], [], 0)
+
+
+def test_inline_comment_holds_a_suggested_change():
+    one = inline_comment(Suggestion("a.py", 2, 2, "x = 2", "x = 3", "Off by one."))
+    assert one == {"path": "a.py", "line": 2, "side": "RIGHT",
+                   "body": "Off by one.\n\n```suggestion\nx = 3\n```"}
+    many = inline_comment(Suggestion("a.py", 20, 21, "def f():\n    pass", "", ""))
+    assert many == {"path": "a.py", "line": 21, "side": "RIGHT", "start_line": 20,
+                    "start_side": "RIGHT", "body": "```suggestion\n```"}
+
+
+def test_format_review_body_lists_findings_past_the_inline_ones():
+    rest = [Suggestion("a.py", 30, 30, "a", "b", "Unused."), Suggestion("b.py", 4, 6, "a", "b", "")]
+    text = format_review_body("memo", rest, [FileReview("a.py", rest)], [], 0)
+    assert text == ("**What this PR does:** memo\n\n"
+                    "**2 more findings** past the 12 shown inline:\n"
+                    "- `a.py` line 30: Unused.\n- `b.py` lines 4-6\n\nReviewed 1 file.")
+    assert format_review_body("memo", [], [], [], 0) == "**What this PR does:** memo\n\nReviewed 0 files."

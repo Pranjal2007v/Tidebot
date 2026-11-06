@@ -231,4 +231,4 @@ The spec is [README.md](README.md). Work follows its [Roadmap](README.md#roadmap
 | A | Pranjal2007v | pranjalgangwar910@gmail.com | `9e71ccd6656800371977fd7b20a15fc81573d48d` | feat: memo the PR thread and pick which changed files to review |
 | B | ishitasharma2490 | ishitasharma2490@gmail.com | `f2d97300ae3bf320d8b68249b657c30c8ec8ffd1` | feat: review changed files four at a time into line suggestions |
 | C | bitflicker64 | himnshuverma10152006@gmail.com | `cd8a731efabf1098d9a69ebe301ef3e996333b38` | feat: drop review suggestions that do not match the real file lines |
-| D | Payal-Phougat | 226825128+Payal-Phougat@users.noreply.github.com | *(this commit, filled in next run)* | feat: add /review with up to 12 verified findings in one comment |
+| D | Payal-Phougat | 226825128+Payal-Phougat@users.noreply.github.com | `e10b7213b1ab356c6945f813bef654dfae9b7049` | feat: add /review with up to 12 verified findings in one comment |

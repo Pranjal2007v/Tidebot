@@ -8,7 +8,8 @@ file on its own, four at a time, and collects the model's findings as
 lines as the model read them and their replacement. ``verify`` checks each
 suggestion against the real lines of the file at the PR's head commit and
 drops any that don't apply cleanly. ``format_review`` writes what is left
-into the one comment ``/review`` posts.
+into the one comment ``/review`` posts; ``inline_comment`` and
+``format_review_body`` turn it into the PR review ``/review-sc`` posts.
 """
 
 from __future__ import annotations
@@ -299,6 +300,19 @@ def _finding(n: int, s: Suggestion) -> str:
     return head + "\n\n````diff\n" + "\n".join(diff) + "\n````"
 
 
+def _tally(reviews: List[FileReview], skipped: List[Tuple[str, str]], dropped: int) -> str:
+    tally = [f"Reviewed {_plural(len(reviews), 'file')}."]
+    failed = [r for r in reviews if r.error]
+    if failed:
+        tally.append("Could not review: " + ", ".join(f"`{r.path}` ({r.error})" for r in failed)
+                     + ".")
+    if skipped:
+        tally.append("Skipped: " + ", ".join(f"`{p}` ({why})" for p, why in skipped) + ".")
+    if dropped:
+        tally.append(f"Dropped {_plural(dropped, 'suggestion')} that didn't match the file.")
+    return " ".join(tally)
+
+
 def format_review(memo: str, kept: List[Suggestion], reviews: List[FileReview],
                   skipped: List[Tuple[str, str]], dropped: int) -> str:
     """The ``/review`` comment: the memo, up to ``MAX_FINDINGS`` findings and a tally."""
@@ -311,14 +325,34 @@ def format_review(memo: str, kept: List[Suggestion], reviews: List[FileReview],
             parts.append(f"{_plural(more, 'more finding')} not shown.")
     else:
         parts.append("No problems found in the reviewed files.")
-    tally = [f"Reviewed {_plural(len(reviews), 'file')}."]
-    failed = [r for r in reviews if r.error]
-    if failed:
-        tally.append("Could not review: " + ", ".join(f"`{r.path}` ({r.error})" for r in failed)
-                     + ".")
-    if skipped:
-        tally.append("Skipped: " + ", ".join(f"`{p}` ({why})" for p, why in skipped) + ".")
-    if dropped:
-        tally.append(f"Dropped {_plural(dropped, 'suggestion')} that didn't match the file.")
-    parts.append(" ".join(tally))
+    parts.append(_tally(reviews, skipped, dropped))
+    return "\n\n".join(parts)
+
+
+def inline_comment(s: Suggestion) -> dict:
+    """``s`` as an inline review comment holding a GitHub suggested change.
+
+    An empty replacement suggests deleting the lines.
+    """
+    body = (f"{s.note}\n\n" if s.note else "") + "```suggestion\n"
+    body += (s.replacement + "\n" if s.replacement else "") + "```"
+    comment = {"path": s.path, "line": s.end, "side": "RIGHT", "body": body}
+    if s.start != s.end:
+        comment.update(start_line=s.start, start_side="RIGHT")
+    return comment
+
+
+def format_review_body(memo: str, rest: List[Suggestion], reviews: List[FileReview],
+                       skipped: List[Tuple[str, str]], dropped: int) -> str:
+    """The body of the ``/review-sc`` review: the memo, the findings that
+    didn't fit inline as one line each, and the tally."""
+    parts = [f"**What this PR does:** {memo.strip()}"]
+    if rest:
+        lines = []
+        for s in rest:
+            where = f"line {s.start}" if s.start == s.end else f"lines {s.start}-{s.end}"
+            lines.append(f"- `{s.path}` {where}" + (f": {s.note}" if s.note else ""))
+        parts.append(f"**{_plural(len(rest), 'more finding')}** past the "
+                     f"{MAX_FINDINGS} shown inline:\n" + "\n".join(lines))
+    parts.append(_tally(reviews, skipped, dropped))
     return "\n\n".join(parts)

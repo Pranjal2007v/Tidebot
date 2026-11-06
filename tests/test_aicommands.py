@@ -154,6 +154,9 @@ class ReviewGitHub(FakeGitHub):
         self.calls.append(("fetch_file", path, ref))
         return self.files.get(path)
 
+    def post_review(self, repo, number, sha, body, comments):
+        self.calls.append(("post_review", repo, number, sha, body, comments))
+
 
 class ReviewAI:
     def __init__(self, findings):
@@ -195,3 +198,50 @@ def test_review_needs_a_pr_and_something_to_review():
     assert run(gh, ai, "review", PR)[3].endswith("Nothing to review: every changed file is a "
                                                  "lockfile, generated, removed or binary.")
     assert ai.prompts == []
+
+
+A_PY = [{"filename": "a.py", "status": "modified",
+         "patch": "@@ -1,2 +1,2 @@\n import os\n-x = 1\n+x = 2"}]
+
+
+def test_review_sc_posts_inline_suggestions_in_one_review():
+    gh = ReviewGitHub(A_PY, {"a.py": "import os\nx = 2\n"})
+    ai = ReviewAI('[{"start": 2, "original": "x = 2", "replacement": "x = 3", "note": "Too low."}]')
+    call = run(gh, ai, "review-sc", PR)
+    assert call[:4] == ("post_review", "o/r", 5, "abc")
+    assert call[4] == ("`/review-sc` for @alice:\n\n**What this PR does:** It bumps x."
+                       "\n\nReviewed 1 file.")
+    assert call[5] == [{"path": "a.py", "line": 2, "side": "RIGHT",
+                        "body": "Too low.\n\n```suggestion\nx = 3\n```"}]
+    assert not any(c[0] == "post_comment" for c in gh.calls)
+
+
+def test_review_sc_puts_findings_past_twelve_in_the_body():
+    lines = [f"x{n} = {n}" for n in range(1, 16)]
+    patch = "@@ -0,0 +1,15 @@\n" + "\n".join("+" + line for line in lines)
+    gh = ReviewGitHub([{"filename": "a.py", "status": "added", "patch": patch}],
+                      {"a.py": "\n".join(lines)})
+    found = ", ".join(f'{{"start": {n}, "original": "x{n} = {n}", "replacement": "x{n} = 0"}}'
+                      for n in range(1, 16))
+    call = run(gh, ReviewAI(f"[{found}]"), "review-sc", PR)
+    assert len(call[5]) == 12
+    assert "**3 more findings** past the 12 shown inline:\n- `a.py` line 13" in call[4]
+
+
+def test_review_sc_without_findings_comments_instead():
+    gh = ReviewGitHub(A_PY, {"a.py": "import os\nx = 2\n"})
+    call = run(gh, ReviewAI("[]"), "review-sc", PR)
+    assert call[0] == "post_comment"
+    assert "No problems found in the reviewed files." in call[3]
+    assert run(gh, ReviewAI("[]"), "review-sc")[3].endswith(
+        "`/review-sc` works on pull requests only.")
+
+
+def test_review_sc_reports_a_refused_review():
+    class Refusing(ReviewGitHub):
+        def post_review(self, *args):
+            raise GitHubError(422, "line must be part of the diff")
+
+    gh = Refusing(A_PY, {"a.py": "import os\nx = 2\n"})
+    ai = ReviewAI('[{"start": 2, "original": "x = 2", "replacement": "x = 3"}]')
+    assert run(gh, ai, "review-sc", PR)[3] == "`/review-sc` failed: GitHub answered 422"

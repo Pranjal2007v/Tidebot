@@ -2,20 +2,24 @@
 
 Each command is a prompt around some context from the issue or PR. The
 router has checked permission and rate limits; the app then queues the job
-built by ``make_job``, which asks the model and posts the reply itself.
+built by ``make_job``, which asks the model and posts the reply itself. A
+command that posts its own answer, as ``/review-sc`` posts a PR review,
+returns None so no comment follows.
 Commands the model can't help with yet are left out of ``AI_HANDLERS``.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Callable, Dict, List, Optional
+from typing import Callable, Dict, List, Optional, Tuple, Union
 
 from .ai import AIClient, AIError
 from .aiqueue import Job
 from .commands import Command
 from .github import GitHubClient, GitHubError
-from .review import ChangedFile, format_review, pick_files, review_files, verify, write_memo
+from .review import (MAX_FINDINGS, ChangedFile, FileReview, Suggestion, format_review,
+                     format_review_body, inline_comment, pick_files, review_files, verify,
+                     write_memo)
 from .router import is_bot
 from .workflow import Target
 
@@ -27,7 +31,7 @@ MAX_OPENING = 3000
 # GitHub refuses comments over 65536 characters.
 MAX_REPLY = 60000
 
-Runner = Callable[[GitHubClient, AIClient, Target, str], str]
+Runner = Callable[[GitHubClient, AIClient, Target, str], Optional[str]]
 
 
 @dataclass(frozen=True)
@@ -119,10 +123,27 @@ def _explain(gh: GitHubClient, ai: AIClient, t: Target, args: str) -> str:
     return ai.ask(_system(t.repo, task), context)
 
 
-def _review(gh: GitHubClient, ai: AIClient, t: Target, args: str) -> str:
-    """Run the review pipeline from the README's "How code review works"."""
+@dataclass(frozen=True)
+class ReviewResult:
+    """What the review pipeline found at the PR's head commit ``sha``."""
+    sha: str
+    memo: str
+    kept: List[Suggestion]
+    reviews: List[FileReview]
+    skipped: List[Tuple[str, str]]
+    dropped: int
+
+    def comment(self) -> str:
+        return format_review(self.memo, self.kept, self.reviews, self.skipped, self.dropped)
+
+
+def _pipeline(gh: GitHubClient, ai: AIClient, t: Target, name: str) -> Union[str, ReviewResult]:
+    """Run the review pipeline from the README's "How code review works".
+
+    Returns a reply instead when there is nothing to review.
+    """
     if not t.is_pr:
-        return "`/review` works on pull requests only."
+        return f"`/{name}` works on pull requests only."
     sha = gh.pull(t.repo, t.number)["head"]["sha"]
     files = [ChangedFile.from_api(f) for f in gh.pull_changes(t.repo, t.number)]
     to_review, skipped = pick_files(files)
@@ -134,7 +155,32 @@ def _review(gh: GitHubClient, ai: AIClient, t: Target, args: str) -> str:
     reviews = review_files(ai, t.repo, memo, to_review)
     found = [s for r in reviews for s in r.suggestions]
     kept, dropped = verify(gh, t.repo, sha, to_review, found)
-    return format_review(memo, kept, reviews, skipped, dropped)
+    return ReviewResult(sha, memo, kept, reviews, skipped, dropped)
+
+
+def _review(gh: GitHubClient, ai: AIClient, t: Target, args: str) -> str:
+    result = _pipeline(gh, ai, t, "review")
+    return result if isinstance(result, str) else result.comment()
+
+
+def _review_sc(gh: GitHubClient, ai: AIClient, t: Target, args: str) -> Optional[str]:
+    """Post the verified findings as inline suggested changes in one PR review.
+
+    Up to ``MAX_FINDINGS`` go inline and the rest are listed in the review
+    body. With no findings there is no review, only the usual comment.
+    """
+    r = _pipeline(gh, ai, t, "review-sc")
+    if isinstance(r, str):
+        return r
+    if not r.kept:
+        return r.comment()
+    body = (f"`/review-sc` for @{t.author}:\n\n"
+            + format_review_body(r.memo, r.kept[MAX_FINDINGS:], r.reviews, r.skipped, r.dropped))
+    # Placed at the commit the suggestions were checked against, even if
+    # the PR has moved on since.
+    gh.post_review(t.repo, t.number, r.sha, body,
+                   [inline_comment(s) for s in r.kept[:MAX_FINDINGS]])
+    return None
 
 
 AI_HANDLERS: Dict[str, AICommand] = {
@@ -142,6 +188,7 @@ AI_HANDLERS: Dict[str, AICommand] = {
     "summarize": AICommand(_summarize),
     "explain": AICommand(_explain),
     "review": AICommand(_review),
+    "review-sc": AICommand(_review_sc),
 }
 
 
@@ -159,8 +206,10 @@ def make_job(gh: GitHubClient, target: Target, command: Command) -> Job:
 
     def job(ai: AIClient) -> None:
         try:
-            text = clip(handler.run(gh, ai, target, command.args), MAX_REPLY)
-            reply = f"`/{command.name}` for @{target.author}:\n\n{text}"
+            answer = handler.run(gh, ai, target, command.args)
+            if answer is None:
+                return
+            reply = f"`/{command.name}` for @{target.author}:\n\n{clip(answer, MAX_REPLY)}"
         except AIError as err:
             reply = f"`/{command.name}` failed: {err}"
         except GitHubError as err:

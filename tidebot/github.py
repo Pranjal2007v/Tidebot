@@ -222,6 +222,13 @@ class GitHubClient:
         self._request("POST", f"/repos/{repo}/pulls/{number}/reviews",
                       json={"event": "APPROVE", "body": body})
 
+    def post_review(self, repo: str, number: int, sha: str, body: str,
+                    comments: List[dict]) -> None:
+        """Post a comment-only review at ``sha`` with inline ``comments``."""
+        self._request("POST", f"/repos/{repo}/pulls/{number}/reviews",
+                      json={"commit_id": sha, "event": "COMMENT", "body": body,
+                            "comments": comments})
+
     def review_states(self, repo: str, number: int) -> Dict[str, str]:
         """Return each reviewer's latest deciding review: APPROVED or CHANGES_REQUESTED."""
         res = self._request("GET", f"/repos/{repo}/pulls/{number}/reviews",
