@@ -292,3 +292,35 @@ def test_docs_skips_the_note_when_docs_changed():
     assert body.endswith("Reviewed 2 files.")
     assert "No missing docs found in the reviewed files." in body
     assert run(gh, ReviewAI("[]"), "docs")[3].endswith("`/docs` works on pull requests only.")
+
+
+def test_test_lists_cases_from_the_code_diffs():
+    changes = A_PY + [{"filename": "tests/test_a.py", "status": "modified",
+                       "patch": "@@ -1 +1,2 @@\n x\n+def test_x(): pass"},
+                      {"filename": "README.md", "status": "modified", "patch": "@@ -1 +1 @@\n-a\n+b"}]
+    gh = ReviewGitHub(changes, {})
+    ai = FakeAI("- `tests/test_a.py`: `test_x_is_two` checks x.")
+    body = run(gh, ai, "test the counter", PR)[3]
+    assert body == "`/test` for @alice:\n\n- `tests/test_a.py`: `test_x_is_two` checks x."
+    system, user = ai.prompts[0]
+    assert "test cases" in system
+    assert user.startswith("Pull request #5: Bump x")
+    assert "Test files this PR changes: tests/test_a.py" in user
+    assert "File: a.py\n@@ -1,2 +1,2 @@" in user and "     2 +x = 2" in user
+    assert "File: tests/test_a.py" not in user and "File: README.md" not in user
+    assert user.endswith("Focus on: the counter")
+
+
+def test_test_without_code_changes_asks_nothing():
+    gh = ReviewGitHub([{"filename": "tests/test_a.py", "patch": "@@ -1 +1 @@\n-a\n+b"}], {})
+    ai = FakeAI()
+    assert run(gh, ai, "test", PR)[3].endswith("Nothing to test: this PR changes no code, "
+                                               "only tests, docs or generated files.")
+    assert ai.prompts == []
+    assert run(gh, ai, "test")[3].endswith("`/test` works on pull requests only.")
+
+
+def test_test_says_when_no_tests_changed():
+    ai = FakeAI()
+    run(ReviewGitHub(A_PY, {}), ai, "test", PR)
+    assert "This PR changes no test files." in ai.prompts[0][1]

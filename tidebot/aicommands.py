@@ -18,7 +18,7 @@ from .aiqueue import Job
 from .commands import Command
 from .github import GitHubClient, GitHubError
 from .review import (FOCUS, MAX_FINDINGS, ChangedFile, FileReview, Focus, Suggestion,
-                     format_review, is_docs_path,
+                     format_review, is_docs_path, is_test_path, numbered,
                      format_review_body, inline_comment, pick_files, review_files, verify,
                      write_memo)
 from .router import is_bot
@@ -187,6 +187,37 @@ def _docs(gh: GitHubClient, ai: AIClient, t: Target, args: str) -> str:
     return text
 
 
+def _test(gh: GitHubClient, ai: AIClient, t: Target, args: str) -> str:
+    """List the test cases a PR's code changes still need.
+
+    The model sees the code diffs and the names of the test files the PR
+    already touches, so it can say where each case belongs and skip what
+    those tests cover. Text after the command narrows the focus.
+    """
+    if not t.is_pr:
+        return "`/test` works on pull requests only."
+    files = [ChangedFile.from_api(f) for f in gh.pull_changes(t.repo, t.number)]
+    to_review, _ = pick_files(files)
+    tests = [f.path for f in files if is_test_path(f.path) and f.status != "removed"]
+    code = [f for f in to_review if not is_test_path(f.path) and not is_docs_path(f.path)]
+    if not code:
+        return "Nothing to test: this PR changes no code, only tests, docs or generated files."
+    diffs = "\n\n".join(f"File: {f.path}\n{numbered(f.patch)}" for f in code)
+    context = _opening_post(gh, t)
+    context += ("\n\nTest files this PR changes: " + ", ".join(tests) if tests else
+                "\n\nThis PR changes no test files.")
+    context += f"\n\nCode changes:\n{clip(diffs)}"
+    if args.strip():
+        context += f"\n\nFocus on: {args.strip()}"
+    return ai.ask(_system(t.repo, "List the test cases the code changes below still need, "
+                                  "at most eight, as Markdown bullets. For each give the test "
+                                  "file it belongs in (one the PR already changes when it "
+                                  "fits), a test name and what it checks: edge cases, error "
+                                  "paths and the behavior the PR adds. Leave out cases the "
+                                  "changed test files clearly cover already."),
+                  context)
+
+
 def _review_sc(gh: GitHubClient, ai: AIClient, t: Target, args: str) -> Optional[str]:
     """Post the verified findings as inline suggested changes in one PR review.
 
@@ -216,6 +247,7 @@ AI_HANDLERS: Dict[str, AICommand] = {
     "security": AICommand(_focused_review("security")),
     "perf": AICommand(_focused_review("perf")),
     "docs": AICommand(_docs),
+    "test": AICommand(_test),
 }
 
 

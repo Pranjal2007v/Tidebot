@@ -250,6 +250,17 @@ def is_docs_path(path: str) -> bool:
     parts = path.lower().split("/")
     return parts[-1].endswith(DOC_SUFFIXES) or bool(DOC_DIRS & set(parts[:-1]))
 
+
+TEST_DIRS = {"test", "tests", "__tests__", "spec", "testing"}
+# test_x.py, x_test.go, x.test.ts, x.spec.js, XTest.java, x_spec.rb and so on.
+_TEST_NAME = re.compile(r"^test_|_test\.|\.test\.|\.spec\.|_spec\.|Tests?\.(java|kt|cs|swift)$")
+
+
+def is_test_path(path: str) -> bool:
+    """True for a file that holds tests."""
+    parts = path.split("/")
+    return bool(_TEST_NAME.search(parts[-1])) or bool(TEST_DIRS & {p.lower() for p in parts[:-1]})
+
 _FILE_TASK = (
     "You are Tidebot, reviewing one file of a pull request to the GitHub repository {repo}. "
     "{focus} Each line of the diff starts with its line number in the "

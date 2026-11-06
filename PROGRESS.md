@@ -232,3 +232,29 @@ The spec is [README.md](README.md). Work follows its [Roadmap](README.md#roadmap
 | B | ishitasharma2490 | ishitasharma2490@gmail.com | `f2d97300ae3bf320d8b68249b657c30c8ec8ffd1` | feat: review changed files four at a time into line suggestions |
 | C | bitflicker64 | himnshuverma10152006@gmail.com | `cd8a731efabf1098d9a69ebe301ef3e996333b38` | feat: drop review suggestions that do not match the real file lines |
 | D | Payal-Phougat | 226825128+Payal-Phougat@users.noreply.github.com | `e10b7213b1ab356c6945f813bef654dfae9b7049` | feat: add /review with up to 12 verified findings in one comment |
+
+## Run 10 (2026-11-06)
+
+**Estimated complete:** 50%
+
+**Added**
+
+- `/review-sc`, step 4 of [How code review works](README.md#how-code-review-works): it runs the same pipeline as `/review` and posts one PR review at the commit the suggestions were checked against. Up to 12 verified findings go inline as GitHub suggested changes (a multi-line finding covers its whole range, an empty replacement suggests deleting the lines), and the rest are listed one per line in the review body with the memo and the tally. With no findings it posts the usual `/review` comment instead. New client method `post_review` sends a comment-only review; if GitHub refuses it, the reply says so.
+- `/security` and `/perf`: the per-file pipeline with a focused prompt (`Focus` in `tidebot/review.py`). `/security` looks only for injection, path traversal, unsafe deserialization, missing auth checks, secrets in code and weak crypto; `/perf` only for repeated work in loops, a call per item where a batch would do, quadratic searches and similar. Findings are verified against the file like `/review` and posted in one comment.
+- `/docs`: the same pipeline asking for missing or outdated docstrings and doc comments, written in the file's own style. When the PR changes code but no docs files (README, `*.md`, `docs/` and the like), the reply says the docs may need an update too.
+- `/test`: one model call with the PR's code diffs and the names of the test files it already changes. The reply is up to eight test cases, each with the file it belongs in, a name and what it checks. Tests, docs and generated files aren't sent as code, and a PR that changes no code gets a reply without a model call. Text after the command narrows the focus.
+
+**Next 5%**
+
+- The remaining [AI commands](README.md#ai-commands-14): `/changelog` (a release-note line from the PR), `/estimate` (a rough size and effort for an issue), `/checklist` (a review or done checklist for the issue or PR) and `/roast` (a light-hearted take on the PR).
+- `/chat`: a back-and-forth with the model in the thread, using the earlier `/chat` turns as context.
+- After that, the core bot and AI items in the [Roadmap](README.md#roadmap) can be ticked and the website work starts.
+
+**Blockers:** none. Still not run against a live GitHub App or a real model endpoint; API and model calls are covered by mocked tests.
+
+| Commit | GitHub | Email | SHA | Message |
+|---|---|---|---|---|
+| A | ishitasharma2490 | ishitasharma2490@gmail.com | `30ddce0c2ee1999c5da5bc08a3715d8634ae4a64` | feat: add /review-sc with inline suggested changes in one PR review |
+| B | bitflicker64 | himnshuverma10152006@gmail.com | `52da842bcd2564746af9721ee1ea2411f01f07cc` | feat: add /security and /perf as focused passes of the review pipeline |
+| C | Payal-Phougat | 226825128+Payal-Phougat@users.noreply.github.com | `7ee9f5f74c2e9f3a09a6486ba299bd02178a821d` | feat: add /docs to suggest missing doc comments on a PR |
+| D | Pranjal2007v | pranjalgangwar910@gmail.com | *(this commit, filled in next run)* | feat: add /test to list the test cases a PR still needs |

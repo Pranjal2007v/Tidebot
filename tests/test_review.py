@@ -3,7 +3,7 @@ import time
 
 from tidebot.ai import AIError
 from tidebot.github import GitHubError
-from tidebot.review import (FOCUS, ChangedFile, FileReview, Hunk, Suggestion, check, hunks, is_docs_path, numbered,
+from tidebot.review import (FOCUS, ChangedFile, FileReview, Hunk, Suggestion, check, hunks, is_docs_path, is_test_path, numbered,
                             format_review, format_review_body, inline_comment,
                             parse_findings, pick_files, review_file,
                             review_files, skip_reason, verify, write_memo)
@@ -268,3 +268,12 @@ def test_docs_paths():
     assert is_docs_path("guide/Install.RST") and is_docs_path("doc/api/index.html")
     assert not is_docs_path("tidebot/app.py") and not is_docs_path("docsite.py")
     assert "missing docs" in FOCUS["docs"].label and "docstring" in FOCUS["docs"].task
+
+
+def test_test_paths():
+    for path in ("tests/test_app.py", "test_app.py", "pkg/server_test.go", "web/app.test.ts",
+                 "web/app.spec.js", "src/test/java/AppTest.java", "spec/user_spec.rb",
+                 "web/__tests__/app.js"):
+        assert is_test_path(path), path
+    for path in ("tidebot/app.py", "latest.py", "contest/main.go", "attestation.py"):
+        assert not is_test_path(path), path
