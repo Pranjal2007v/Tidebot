@@ -245,3 +245,28 @@ def test_review_sc_reports_a_refused_review():
     gh = Refusing(A_PY, {"a.py": "import os\nx = 2\n"})
     ai = ReviewAI('[{"start": 2, "original": "x = 2", "replacement": "x = 3"}]')
     assert run(gh, ai, "review-sc", PR)[3] == "`/review-sc` failed: GitHub answered 422"
+
+
+def test_security_and_perf_review_with_their_own_focus():
+    class Recording(ReviewAI):
+        def ask(self, system, user, **kwargs):
+            self.systems = getattr(self, "systems", []) + [system]
+            return super().ask(system, user, **kwargs)
+
+    for name, label in (("security", "security problems"), ("perf", "performance problems")):
+        gh = ReviewGitHub(A_PY, {"a.py": "import os\nx = 2\n"})
+        ai = Recording("[]")
+        body = run(gh, ai, name, PR)[3]
+        assert body.startswith(f"`/{name}` for @alice:\n\n**What this PR does:** It bumps x.")
+        assert f"No {label} found in the reviewed files." in body
+        assert label in ai.systems[1]
+        assert run(gh, ai, name)[3].endswith(f"`/{name}` works on pull requests only.")
+
+
+def test_security_findings_are_verified_like_review():
+    gh = ReviewGitHub(A_PY, {"a.py": "import os\nx = 2\n"})
+    ai = ReviewAI('[{"start": 2, "original": "x = 2", "replacement": "x = int(os.environ[\'X\'])",'
+                  ' "note": "Hard-coded."}, {"start": 9, "original": "y", "replacement": "z"}]')
+    body = run(gh, ai, "security", PR)[3]
+    assert "1. `a.py` line 2: Hard-coded." in body
+    assert body.endswith("Dropped 1 suggestion that didn't match the file.")

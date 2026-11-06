@@ -17,7 +17,8 @@ from .ai import AIClient, AIError
 from .aiqueue import Job
 from .commands import Command
 from .github import GitHubClient, GitHubError
-from .review import (MAX_FINDINGS, ChangedFile, FileReview, Suggestion, format_review,
+from .review import (FOCUS, MAX_FINDINGS, ChangedFile, FileReview, Focus, Suggestion,
+                     format_review,
                      format_review_body, inline_comment, pick_files, review_files, verify,
                      write_memo)
 from .router import is_bot
@@ -132,12 +133,15 @@ class ReviewResult:
     reviews: List[FileReview]
     skipped: List[Tuple[str, str]]
     dropped: int
+    focus: Focus
 
     def comment(self) -> str:
-        return format_review(self.memo, self.kept, self.reviews, self.skipped, self.dropped)
+        return format_review(self.memo, self.kept, self.reviews, self.skipped, self.dropped,
+                             self.focus.label)
 
 
-def _pipeline(gh: GitHubClient, ai: AIClient, t: Target, name: str) -> Union[str, ReviewResult]:
+def _pipeline(gh: GitHubClient, ai: AIClient, t: Target, name: str,
+              focus: Focus = FOCUS["review"]) -> Union[str, ReviewResult]:
     """Run the review pipeline from the README's "How code review works".
 
     Returns a reply instead when there is nothing to review.
@@ -152,15 +156,20 @@ def _pipeline(gh: GitHubClient, ai: AIClient, t: Target, name: str) -> Union[str
     thread = thread_text(gh.issue(t.repo, t.number), gh.issue_comments(t.repo, t.number),
                          True, t.number)
     memo = write_memo(ai, t.repo, thread)
-    reviews = review_files(ai, t.repo, memo, to_review)
+    reviews = review_files(ai, t.repo, memo, to_review, focus=focus)
     found = [s for r in reviews for s in r.suggestions]
     kept, dropped = verify(gh, t.repo, sha, to_review, found)
-    return ReviewResult(sha, memo, kept, reviews, skipped, dropped)
+    return ReviewResult(sha, memo, kept, reviews, skipped, dropped, focus)
 
 
-def _review(gh: GitHubClient, ai: AIClient, t: Target, args: str) -> str:
-    result = _pipeline(gh, ai, t, "review")
-    return result if isinstance(result, str) else result.comment()
+def _focused_review(name: str) -> Runner:
+    """``/review``, ``/security`` or ``/perf``: the pipeline with that command's focus,
+    answered in one comment."""
+    def run(gh: GitHubClient, ai: AIClient, t: Target, args: str) -> str:
+        result = _pipeline(gh, ai, t, name, FOCUS[name])
+        return result if isinstance(result, str) else result.comment()
+
+    return run
 
 
 def _review_sc(gh: GitHubClient, ai: AIClient, t: Target, args: str) -> Optional[str]:
@@ -187,8 +196,10 @@ AI_HANDLERS: Dict[str, AICommand] = {
     "ask": AICommand(_ask, "Usage: `:tide /ask where is auth handled?`"),
     "summarize": AICommand(_summarize),
     "explain": AICommand(_explain),
-    "review": AICommand(_review),
+    "review": AICommand(_focused_review("review")),
     "review-sc": AICommand(_review_sc),
+    "security": AICommand(_focused_review("security")),
+    "perf": AICommand(_focused_review("perf")),
 }
 
 

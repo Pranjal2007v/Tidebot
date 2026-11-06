@@ -3,7 +3,9 @@
 ``write_memo`` reads the PR thread into a short memo on what the PR is
 trying to do, and ``pick_files`` lists the changed files worth reviewing,
 leaving out lockfiles and generated code. ``review_files`` then reviews each
-file on its own, four at a time, and collects the model's findings as
+file on its own, four at a time, with the ``Focus`` of the command that asked
+(``/review`` looks for any real problem, ``/security`` and ``/perf`` for one
+kind), and collects the model's findings as
 ``Suggestion`` objects: a path, a line range on the new side of the diff, the
 lines as the model read them and their replacement. ``verify`` checks each
 suggestion against the real lines of the file at the PR's head commit and
@@ -208,10 +210,32 @@ def parse_findings(path: str, answer: str) -> List[Suggestion]:
     return found
 
 
+@dataclass(frozen=True)
+class Focus:
+    # What the model is told to look for, and what the reply calls it.
+    task: str
+    label: str
+
+
+FOCUS: Dict[str, Focus] = {
+    "review": Focus("Look for real problems only: bugs, security holes, wrong error handling, "
+                    "clear mistakes. Skip style nits.", "problems"),
+    "security": Focus("Look only for security problems: injection into SQL, shell commands or "
+                      "templates, path traversal, unsafe deserialization, missing "
+                      "authentication or permission checks, secrets in code, weak crypto or "
+                      "randomness, and untrusted input reaching a dangerous call. Ignore "
+                      "everything else.", "security problems"),
+    "perf": Focus("Look only for performance problems: work repeated inside loops, a query or "
+                  "API call per item where one batch would do, quadratic searches where a set "
+                  "or dict would do, whole files or responses read into memory without need, "
+                  "blocking calls on hot paths and costly results computed again and again. "
+                  "Ignore everything else and skip micro-optimizations.",
+                  "performance problems"),
+}
+
 _FILE_TASK = (
     "You are Tidebot, reviewing one file of a pull request to the GitHub repository {repo}. "
-    "Look for real problems only: bugs, security holes, wrong error handling, clear "
-    "mistakes. Skip style nits. Each line of the diff starts with its line number in the "
+    "{focus} Each line of the diff starts with its line number in the "
     "new file; removed lines have none and can't be changed. Reply with only a JSON array, "
     "one object per problem: {{\"start\": first line, \"end\": last line, \"original\": "
     "the exact current text of those lines, \"replacement\": the text that should replace "
@@ -219,13 +243,14 @@ _FILE_TASK = (
 )
 
 
-def review_file(ai: AIClient, repo: str, memo: str, f: ChangedFile) -> FileReview:
+def review_file(ai: AIClient, repo: str, memo: str, f: ChangedFile,
+                focus: Focus = FOCUS["review"]) -> FileReview:
     """Ask the model about one file and collect its suggestions."""
     diff = numbered(f.patch)
     if len(diff) > MAX_FILE_CONTEXT:
         diff = diff[:MAX_FILE_CONTEXT] + "\n[...cut for length]"
     try:
-        answer = ai.ask(_FILE_TASK.format(repo=repo),
+        answer = ai.ask(_FILE_TASK.format(repo=repo, focus=focus.task),
                         f"What the PR is for: {memo}\n\nFile: {f.path}\n\n{diff}",
                         max_tokens=FILE_TOKENS)
     except AIError as err:
@@ -234,12 +259,12 @@ def review_file(ai: AIClient, repo: str, memo: str, f: ChangedFile) -> FileRevie
 
 
 def review_files(ai: AIClient, repo: str, memo: str, files: List[ChangedFile],
-                 workers: int = WORKERS) -> List[FileReview]:
+                 workers: int = WORKERS, focus: Focus = FOCUS["review"]) -> List[FileReview]:
     """Review every file in ``files``, ``workers`` at a time, in the same order."""
     if not files:
         return []
     with ThreadPoolExecutor(max_workers=workers) as pool:
-        return list(pool.map(lambda f: review_file(ai, repo, memo, f), files))
+        return list(pool.map(lambda f: review_file(ai, repo, memo, f, focus), files))
 
 
 def _lines(text: str) -> List[str]:
@@ -314,7 +339,7 @@ def _tally(reviews: List[FileReview], skipped: List[Tuple[str, str]], dropped: i
 
 
 def format_review(memo: str, kept: List[Suggestion], reviews: List[FileReview],
-                  skipped: List[Tuple[str, str]], dropped: int) -> str:
+                  skipped: List[Tuple[str, str]], dropped: int, label: str = "problems") -> str:
     """The ``/review`` comment: the memo, up to ``MAX_FINDINGS`` findings and a tally."""
     parts = [f"**What this PR does:** {memo.strip()}"]
     if kept:
@@ -324,7 +349,7 @@ def format_review(memo: str, kept: List[Suggestion], reviews: List[FileReview],
             more = len(kept) - MAX_FINDINGS
             parts.append(f"{_plural(more, 'more finding')} not shown.")
     else:
-        parts.append("No problems found in the reviewed files.")
+        parts.append(f"No {label} found in the reviewed files.")
     parts.append(_tally(reviews, skipped, dropped))
     return "\n\n".join(parts)
 

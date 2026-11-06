@@ -3,7 +3,7 @@ import time
 
 from tidebot.ai import AIError
 from tidebot.github import GitHubError
-from tidebot.review import (ChangedFile, FileReview, Hunk, Suggestion, check, hunks, numbered,
+from tidebot.review import (FOCUS, ChangedFile, FileReview, Hunk, Suggestion, check, hunks, numbered,
                             format_review, format_review_body, inline_comment,
                             parse_findings, pick_files, review_file,
                             review_files, skip_reason, verify, write_memo)
@@ -241,3 +241,23 @@ def test_format_review_body_lists_findings_past_the_inline_ones():
                     "**2 more findings** past the 12 shown inline:\n"
                     "- `a.py` line 30: Unused.\n- `b.py` lines 4-6\n\nReviewed 1 file.")
     assert format_review_body("memo", [], [], [], 0) == "**What this PR does:** memo\n\nReviewed 0 files."
+
+
+def test_review_file_uses_the_focus_it_is_given():
+    class FakeAI:
+        def ask(self, system, user, **kwargs):
+            self.system = system
+            return "[]"
+
+    ai = FakeAI()
+    review_file(ai, "o/r", "memo", changed("a.py"), FOCUS["security"])
+    assert "security problems" in ai.system and "Skip style nits" not in ai.system
+    review_files(ai, "o/r", "memo", [changed("a.py")], focus=FOCUS["perf"])
+    assert "performance problems" in ai.system
+    review_file(ai, "o/r", "memo", changed("a.py"))
+    assert "Skip style nits" in ai.system
+
+
+def test_format_review_names_what_it_looked_for():
+    text = format_review("memo", [], [FileReview("a.py", [])], [], 0, "security problems")
+    assert "No security problems found in the reviewed files." in text
