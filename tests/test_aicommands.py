@@ -270,3 +270,25 @@ def test_security_findings_are_verified_like_review():
     body = run(gh, ai, "security", PR)[3]
     assert "1. `a.py` line 2: Hard-coded." in body
     assert body.endswith("Dropped 1 suggestion that didn't match the file.")
+
+
+def test_docs_suggests_docstrings_and_notes_untouched_docs():
+    patch = "@@ -0,0 +1,2 @@\n+def retry(n):\n+    return n"
+    gh = ReviewGitHub([{"filename": "a.py", "status": "added", "patch": patch}],
+                      {"a.py": "def retry(n):\n    return n\n"})
+    ai = ReviewAI('[{"start": 1, "original": "def retry(n):", "replacement": '
+                  '"def retry(n):\\n    \\"\\"\\"Retry n times.\\"\\"\\"", "note": "No docstring."}]')
+    body = run(gh, ai, "docs", PR)[3]
+    assert "1. `a.py` line 1: No docstring." in body
+    assert '+    """Retry n times."""' in body
+    assert body.endswith("If it changes how something is used, the docs may need an update too.")
+
+
+def test_docs_skips_the_note_when_docs_changed():
+    changes = A_PY + [{"filename": "README.md", "status": "modified",
+                       "patch": "@@ -1 +1 @@\n-old\n+new"}]
+    gh = ReviewGitHub(changes, {"a.py": "import os\nx = 2\n"})
+    body = run(gh, ReviewAI("[]"), "docs", PR)[3]
+    assert body.endswith("Reviewed 2 files.")
+    assert "No missing docs found in the reviewed files." in body
+    assert run(gh, ReviewAI("[]"), "docs")[3].endswith("`/docs` works on pull requests only.")

@@ -4,8 +4,8 @@
 trying to do, and ``pick_files`` lists the changed files worth reviewing,
 leaving out lockfiles and generated code. ``review_files`` then reviews each
 file on its own, four at a time, with the ``Focus`` of the command that asked
-(``/review`` looks for any real problem, ``/security`` and ``/perf`` for one
-kind), and collects the model's findings as
+(``/review`` looks for any real problem, ``/security``, ``/perf`` and
+``/docs`` for one kind), and collects the model's findings as
 ``Suggestion`` objects: a path, a line range on the new side of the diff, the
 lines as the model read them and their replacement. ``verify`` checks each
 suggestion against the real lines of the file at the PR's head commit and
@@ -231,7 +231,24 @@ FOCUS: Dict[str, Focus] = {
                   "blocking calls on hot paths and costly results computed again and again. "
                   "Ignore everything else and skip micro-optimizations.",
                   "performance problems"),
+    "docs": Focus("Look only for missing or wrong documentation: new or changed public "
+                  "functions, classes, methods, options and endpoints without a docstring or "
+                  "doc comment, and existing doc comments or docs text the change made wrong. "
+                  "Write docs in the style the file already uses. For a missing docstring, "
+                  "the replacement is the original lines with the docstring added. Ignore "
+                  "private helpers whose name says what they do, and everything that isn't "
+                  "documentation.", "missing docs"),
 }
+
+# Where projects keep their docs, besides doc comments in the code.
+DOC_SUFFIXES = (".md", ".rst", ".adoc", ".txt")
+DOC_DIRS = {"docs", "doc", "documentation"}
+
+
+def is_docs_path(path: str) -> bool:
+    """True for a file that is documentation rather than code."""
+    parts = path.lower().split("/")
+    return parts[-1].endswith(DOC_SUFFIXES) or bool(DOC_DIRS & set(parts[:-1]))
 
 _FILE_TASK = (
     "You are Tidebot, reviewing one file of a pull request to the GitHub repository {repo}. "

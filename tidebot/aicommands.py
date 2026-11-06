@@ -18,7 +18,7 @@ from .aiqueue import Job
 from .commands import Command
 from .github import GitHubClient, GitHubError
 from .review import (FOCUS, MAX_FINDINGS, ChangedFile, FileReview, Focus, Suggestion,
-                     format_review,
+                     format_review, is_docs_path,
                      format_review_body, inline_comment, pick_files, review_files, verify,
                      write_memo)
 from .router import is_bot
@@ -134,6 +134,8 @@ class ReviewResult:
     skipped: List[Tuple[str, str]]
     dropped: int
     focus: Focus
+    # Every file the PR changes, reviewed or not.
+    paths: List[str]
 
     def comment(self) -> str:
         return format_review(self.memo, self.kept, self.reviews, self.skipped, self.dropped,
@@ -159,7 +161,8 @@ def _pipeline(gh: GitHubClient, ai: AIClient, t: Target, name: str,
     reviews = review_files(ai, t.repo, memo, to_review, focus=focus)
     found = [s for r in reviews for s in r.suggestions]
     kept, dropped = verify(gh, t.repo, sha, to_review, found)
-    return ReviewResult(sha, memo, kept, reviews, skipped, dropped, focus)
+    return ReviewResult(sha, memo, kept, reviews, skipped, dropped, focus,
+                        [f.path for f in files])
 
 
 def _focused_review(name: str) -> Runner:
@@ -170,6 +173,18 @@ def _focused_review(name: str) -> Runner:
         return result if isinstance(result, str) else result.comment()
 
     return run
+
+
+def _docs(gh: GitHubClient, ai: AIClient, t: Target, args: str) -> str:
+    """Suggest missing doc comments, and say when code changed but no docs did."""
+    result = _pipeline(gh, ai, t, "docs", FOCUS["docs"])
+    if isinstance(result, str):
+        return result
+    text = result.comment()
+    if not any(is_docs_path(p) for p in result.paths):
+        text += ("\n\nThis PR changes no docs files (README, `*.md`, `docs/`). If it changes "
+                 "how something is used, the docs may need an update too.")
+    return text
 
 
 def _review_sc(gh: GitHubClient, ai: AIClient, t: Target, args: str) -> Optional[str]:
@@ -200,6 +215,7 @@ AI_HANDLERS: Dict[str, AICommand] = {
     "review-sc": AICommand(_review_sc),
     "security": AICommand(_focused_review("security")),
     "perf": AICommand(_focused_review("perf")),
+    "docs": AICommand(_docs),
 }
 
 

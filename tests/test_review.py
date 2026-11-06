@@ -3,7 +3,7 @@ import time
 
 from tidebot.ai import AIError
 from tidebot.github import GitHubError
-from tidebot.review import (FOCUS, ChangedFile, FileReview, Hunk, Suggestion, check, hunks, numbered,
+from tidebot.review import (FOCUS, ChangedFile, FileReview, Hunk, Suggestion, check, hunks, is_docs_path, numbered,
                             format_review, format_review_body, inline_comment,
                             parse_findings, pick_files, review_file,
                             review_files, skip_reason, verify, write_memo)
@@ -261,3 +261,10 @@ def test_review_file_uses_the_focus_it_is_given():
 def test_format_review_names_what_it_looked_for():
     text = format_review("memo", [], [FileReview("a.py", [])], [], 0, "security problems")
     assert "No security problems found in the reviewed files." in text
+
+
+def test_docs_paths():
+    assert is_docs_path("README.md") and is_docs_path("docs/setup.py")
+    assert is_docs_path("guide/Install.RST") and is_docs_path("doc/api/index.html")
+    assert not is_docs_path("tidebot/app.py") and not is_docs_path("docsite.py")
+    assert "missing docs" in FOCUS["docs"].label and "docstring" in FOCUS["docs"].task
