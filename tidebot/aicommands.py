@@ -326,6 +326,27 @@ def _checklist(gh: GitHubClient, ai: AIClient, t: Target, args: str) -> str:
     return "\n".join(items) if items else answer
 
 
+ROAST_FOOTER = "\n\n_All in good fun. Run `/review` for the serious version._"
+
+
+def _roast(gh: GitHubClient, ai: AIClient, t: Target, args: str) -> str:
+    """A light-hearted take on a PR's code, never on the people behind it."""
+    if not t.is_pr:
+        return "`/roast` works on pull requests only."
+    diff = gh.pull_diff(t.repo, t.number)
+    context = _opening_post(gh, t)
+    context += (f"\n\nDiff:\n{clip(diff, MAX_CONTEXT // 2)}" if diff else
+                "\n\n(The diff is too large to include, so roast its size.)")
+    answer = ai.ask(_system(t.repo, "Give the pull request below a friendly roast in "
+                                    "three to five short lines, like a teammate teasing "
+                                    "over coffee. Joke about the code, naming, size or "
+                                    "commit habits, never about the author as a person, "
+                                    "their skill, or anything outside the PR. No slurs "
+                                    "or swearing. End with one thing the PR does well."),
+                    context, temperature=0.8)
+    return answer + ROAST_FOOTER
+
+
 AI_HANDLERS: Dict[str, AICommand] = {
     "ask": AICommand(_ask, "Usage: `:tide /ask where is auth handled?`"),
     "summarize": AICommand(_summarize),
@@ -339,6 +360,7 @@ AI_HANDLERS: Dict[str, AICommand] = {
     "changelog": AICommand(_changelog),
     "estimate": AICommand(_estimate),
     "checklist": AICommand(_checklist),
+    "roast": AICommand(_roast),
 }
 
 

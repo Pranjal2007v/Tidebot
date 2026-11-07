@@ -409,3 +409,25 @@ def test_checklist_for_an_issue_lists_what_done_means():
     system, user = ai.prompts[0]
     assert "closed as done" in system
     assert user.endswith("Focus on: docs")
+
+
+def test_roast_a_pr_keeps_it_about_the_code():
+    class Warm(FakeAI):
+        def ask(self, system, user, **kwargs):
+            self.kwargs = kwargs
+            return super().ask(system, user)
+
+    gh, ai = FakeGitHub(diff="+def do_stuff2(): pass"), Warm("A function named do_stuff2.")
+    call = run(gh, ai, "roast", PR)
+    assert call[3] == ("`/roast` for @alice:\n\nA function named do_stuff2.\n\n"
+                       "_All in good fun. Run `/review` for the serious version._")
+    system, user = ai.prompts[0]
+    assert "never about the author" in system
+    assert "Diff:\n+def do_stuff2(): pass" in user
+    assert ai.kwargs == {"temperature": 0.8}
+
+
+def test_roast_needs_a_pr():
+    ai = FakeAI()
+    assert run(FakeGitHub(), ai, "roast")[3].endswith("`/roast` works on pull requests only.")
+    assert ai.prompts == []
