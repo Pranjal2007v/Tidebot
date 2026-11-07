@@ -238,6 +238,55 @@ def _review_sc(gh: GitHubClient, ai: AIClient, t: Target, args: str) -> Optional
     return None
 
 
+def changelog_line(answer: str, number: int) -> str:
+    """The model's first line as one release-note bullet ending in ``(#number)``."""
+    line = next((l.strip() for l in answer.splitlines() if l.strip()), "")
+    line = line.lstrip("-*• ").strip().strip("`")
+    if f"#{number}" not in line:
+        line = f"{line} (#{number})"
+    return f"- {line}"
+
+
+def _changelog(gh: GitHubClient, ai: AIClient, t: Target, args: str) -> str:
+    """One release-note line for a PR, from its title, description, files and diff."""
+    if not t.is_pr:
+        return "`/changelog` works on pull requests only."
+    paths = [f.get("filename", "") for f in gh.pull_changes(t.repo, t.number)]
+    diff = gh.pull_diff(t.repo, t.number)
+    context = _opening_post(gh, t)
+    context += "\n\nChanged files: " + (", ".join(paths) if paths else "none")
+    context += f"\n\nDiff:\n{clip(diff, MAX_CONTEXT // 2)}" if diff else ""
+    answer = ai.ask(_system(t.repo, "Write one release-note line for the pull request "
+                                    "below, for people who use the project, not its "
+                                    "developers. Start with a conventional type such as "
+                                    "feat, fix, docs or perf and a colon, then say what "
+                                    "changed for the user in under 15 words. Reply with "
+                                    "the line only."),
+                    context)
+    return changelog_line(answer, t.number)
+
+
+def _estimate(gh: GitHubClient, ai: AIClient, t: Target, args: str) -> str:
+    """A rough size and effort for an issue, or for a PR's change."""
+    thread = thread_text(gh.issue(t.repo, t.number), gh.issue_comments(t.repo, t.number),
+                         t.is_pr, t.number, MAX_CONTEXT // 2)
+    if t.is_pr:
+        pr = gh.pull(t.repo, t.number)
+        thread += (f"\n\nLines changed: +{pr.get('additions', 0)} -{pr.get('deletions', 0)} "
+                   f"across {pr.get('changed_files', 0)} files.")
+        task = ("Estimate how long the pull request below takes to review well and how "
+                "risky it is.")
+    else:
+        task = "Estimate how much work the issue below takes to fix or build."
+    if args.strip():
+        thread += f"\n\nAssume: {args.strip()}"
+    return ai.ask(_system(t.repo, task + " Start with a size from XS, S, M, L or XL and "
+                                         "a rough time such as \"half a day\", then give "
+                                         "up to three short reasons and the main unknown. "
+                                         "It is a guess; say so when the context is thin."),
+                  thread)
+
+
 AI_HANDLERS: Dict[str, AICommand] = {
     "ask": AICommand(_ask, "Usage: `:tide /ask where is auth handled?`"),
     "summarize": AICommand(_summarize),
@@ -248,6 +297,8 @@ AI_HANDLERS: Dict[str, AICommand] = {
     "perf": AICommand(_focused_review("perf")),
     "docs": AICommand(_docs),
     "test": AICommand(_test),
+    "changelog": AICommand(_changelog),
+    "estimate": AICommand(_estimate),
 }
 
 

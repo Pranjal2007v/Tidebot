@@ -257,4 +257,4 @@ The spec is [README.md](README.md). Work follows its [Roadmap](README.md#roadmap
 | A | ishitasharma2490 | ishitasharma2490@gmail.com | `30ddce0c2ee1999c5da5bc08a3715d8634ae4a64` | feat: add /review-sc with inline suggested changes in one PR review |
 | B | bitflicker64 | himnshuverma10152006@gmail.com | `52da842bcd2564746af9721ee1ea2411f01f07cc` | feat: add /security and /perf as focused passes of the review pipeline |
 | C | Payal-Phougat | 226825128+Payal-Phougat@users.noreply.github.com | `7ee9f5f74c2e9f3a09a6486ba299bd02178a821d` | feat: add /docs to suggest missing doc comments on a PR |
-| D | Pranjal2007v | pranjalgangwar910@gmail.com | *(this commit, filled in next run)* | feat: add /test to list the test cases a PR still needs |
+| D | Pranjal2007v | pranjalgangwar910@gmail.com | `bbea0bc90be32ab2094abc17ca7a1a68497d562a` | feat: add /test to list the test cases a PR still needs |

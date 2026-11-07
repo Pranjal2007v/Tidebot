@@ -324,3 +324,59 @@ def test_test_says_when_no_tests_changed():
     ai = FakeAI()
     run(ReviewGitHub(A_PY, {}), ai, "test", PR)
     assert "This PR changes no test files." in ai.prompts[0][1]
+
+
+class PullGitHub(FakeGitHub):
+    def __init__(self, changes=(), pull=None, **kwargs):
+        super().__init__(**kwargs)
+        self.changes = list(changes)
+        self._pull = pull or {}
+
+    def pull(self, repo, number):
+        return self._pull
+
+    def pull_changes(self, repo, number):
+        return self.changes
+
+
+def test_changelog_line_is_one_bullet_with_the_pr_number():
+    from tidebot.aicommands import changelog_line
+    assert changelog_line("fix: logins no longer fail\nmore text", 5) == \
+        "- fix: logins no longer fail (#5)"
+    assert changelog_line("\n- `feat: dark mode (#5)`", 5) == "- feat: dark mode (#5)"
+
+
+def test_changelog_sends_files_and_diff_for_a_pr():
+    gh = PullGitHub([{"filename": "app.py"}, {"filename": "README.md"}], diff="+x = 1")
+    ai = FakeAI("fix: tokens are accepted again")
+    call = run(gh, ai, "changelog", PR)
+    assert call[3] == "`/changelog` for @alice:\n\n- fix: tokens are accepted again (#5)"
+    _, user = ai.prompts[0]
+    assert "Changed files: app.py, README.md" in user
+    assert "Diff:\n+x = 1" in user
+
+
+def test_changelog_needs_a_pr():
+    ai = FakeAI()
+    assert run(FakeGitHub(), ai, "changelog")[3].endswith("works on pull requests only.")
+    assert ai.prompts == []
+
+
+def test_estimate_an_issue_from_its_thread():
+    gh = FakeGitHub(comments=[{"user": {"login": "bob"}, "body": "Seen on mobile too."}])
+    ai = FakeAI("S, about half a day.")
+    call = run(gh, ai, "estimate no new tests needed")
+    assert call[3] == "`/estimate` for @alice:\n\nS, about half a day."
+    system, user = ai.prompts[0]
+    assert "issue below" in system and "XS, S, M, L or XL" in system
+    assert "@bob: Seen on mobile too." in user
+    assert user.endswith("Assume: no new tests needed")
+
+
+def test_estimate_a_pr_includes_its_size():
+    gh = PullGitHub(pull={"additions": 120, "deletions": 8, "changed_files": 3})
+    ai = FakeAI("M")
+    run(gh, ai, "estimate", PR)
+    system, user = ai.prompts[0]
+    assert "review well" in system
+    assert "Lines changed: +120 -8 across 3 files." in user
