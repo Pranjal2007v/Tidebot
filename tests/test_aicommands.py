@@ -380,3 +380,32 @@ def test_estimate_a_pr_includes_its_size():
     system, user = ai.prompts[0]
     assert "review well" in system
     assert "Lines changed: +120 -8 across 3 files." in user
+
+
+def test_checklist_items_become_unticked_tasks():
+    from tidebot.aicommands import checklist_items
+    answer = "Here you go:\n- Run the tests\n* [x] Read app.py\n2. Try a bad token\nThanks"
+    assert checklist_items(answer) == ["- [ ] Run the tests", "- [ ] Read app.py",
+                                       "- [ ] Try a bad token"]
+    assert len(checklist_items("\n".join(f"- item {i}" for i in range(20)))) == 10
+
+
+def test_checklist_for_a_pr_sends_its_diff():
+    gh = FakeGitHub(diff="+retry()")
+    ai = FakeAI("- Run the retry test\n- Check the timeout")
+    call = run(gh, ai, "checklist", PR)
+    assert call[3] == ("`/checklist` for @alice:\n\n"
+                       "- [ ] Run the retry test\n- [ ] Check the timeout")
+    system, user = ai.prompts[0]
+    assert "reviewer" in system
+    assert "Diff:\n+retry()" in user
+
+
+def test_checklist_for_an_issue_lists_what_done_means():
+    ai = FakeAI("No list here.")
+    call = run(FakeGitHub(), ai, "checklist docs")
+    # Without list items the answer is posted as it came.
+    assert call[3].endswith("No list here.")
+    system, user = ai.prompts[0]
+    assert "closed as done" in system
+    assert user.endswith("Focus on: docs")

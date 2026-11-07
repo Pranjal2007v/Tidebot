@@ -10,6 +10,7 @@ Commands the model can't help with yet are left out of ``AI_HANDLERS``.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from typing import Callable, Dict, List, Optional, Tuple, Union
 
@@ -287,6 +288,44 @@ def _estimate(gh: GitHubClient, ai: AIClient, t: Target, args: str) -> str:
                   thread)
 
 
+# Most items a checklist keeps; a long list stops being checked.
+MAX_CHECKLIST = 10
+_LIST_ITEM = re.compile(r"^\s*(?:[-*•+]|\d+[.)])\s+(?:\[[ xX]\]\s+)?(.+)$")
+
+
+def checklist_items(answer: str, limit: int = MAX_CHECKLIST) -> List[str]:
+    """The list items in the model's answer as unticked GitHub task-list lines."""
+    items = []
+    for line in answer.splitlines():
+        match = _LIST_ITEM.match(line)
+        if match and len(items) < limit:
+            items.append(f"- [ ] {match.group(1).strip()}")
+    return items
+
+
+def _checklist(gh: GitHubClient, ai: AIClient, t: Target, args: str) -> str:
+    """A review checklist for a PR, or a definition-of-done checklist for an issue."""
+    thread = thread_text(gh.issue(t.repo, t.number), gh.issue_comments(t.repo, t.number),
+                         t.is_pr, t.number, MAX_CONTEXT // 2)
+    if t.is_pr:
+        diff = gh.pull_diff(t.repo, t.number)
+        thread += (f"\n\nDiff:\n{clip(diff, MAX_CONTEXT // 2)}" if diff else
+                   "\n\n(The diff is too large to include.)")
+        task = ("Write a checklist a reviewer works through before approving the pull "
+                "request below: what to run, read and try, specific to this change.")
+    else:
+        task = ("Write a checklist of what must be true before the issue below can be "
+                "closed as done: the behavior, tests and docs it needs.")
+    if args.strip():
+        thread += f"\n\nFocus on: {args.strip()}"
+    answer = ai.ask(_system(t.repo, task + f" Give at most {MAX_CHECKLIST} items, one "
+                                           "per line, each starting with \"- \" and under "
+                                           "15 words. Reply with the list only."),
+                    thread)
+    items = checklist_items(answer)
+    return "\n".join(items) if items else answer
+
+
 AI_HANDLERS: Dict[str, AICommand] = {
     "ask": AICommand(_ask, "Usage: `:tide /ask where is auth handled?`"),
     "summarize": AICommand(_summarize),
@@ -299,6 +338,7 @@ AI_HANDLERS: Dict[str, AICommand] = {
     "test": AICommand(_test),
     "changelog": AICommand(_changelog),
     "estimate": AICommand(_estimate),
+    "checklist": AICommand(_checklist),
 }
 
 
