@@ -5,7 +5,6 @@ router has checked permission and rate limits; the app then queues the job
 built by ``make_job``, which asks the model and posts the reply itself. A
 command that posts its own answer, as ``/review-sc`` posts a PR review,
 returns None so no comment follows.
-Commands the model can't help with yet are left out of ``AI_HANDLERS``.
 """
 
 from __future__ import annotations
@@ -16,7 +15,7 @@ from typing import Callable, Dict, List, Optional, Tuple, Union
 
 from .ai import AIClient, AIError
 from .aiqueue import Job
-from .commands import Command
+from .commands import Command, parse_commands
 from .github import GitHubClient, GitHubError
 from .review import (FOCUS, MAX_FINDINGS, ChangedFile, FileReview, Focus, Suggestion,
                      format_review, is_docs_path, is_test_path, numbered,
@@ -347,6 +346,54 @@ def _roast(gh: GitHubClient, ai: AIClient, t: Target, args: str) -> str:
     return answer + ROAST_FOOTER
 
 
+# Earlier /chat turns, questions and answers counted apart, kept as context.
+MAX_CHAT_TURNS = 10
+_CHAT_REPLY = "`/chat` for @"
+
+
+def chat_turns(comments: List[dict], limit: int = MAX_CONTEXT) -> List[Dict[str, str]]:
+    """Earlier ``/chat`` questions and Tidebot's answers, oldest first.
+
+    A question is a human comment's ``/chat`` text; an answer is a bot
+    comment that starts the way ``make_job`` starts a ``/chat`` reply. The
+    newest turns are kept when there are more than fit.
+    """
+    turns: List[Dict[str, str]] = []
+    for c in comments:
+        body = c.get("body") or ""
+        if is_bot((c.get("user") or {}).get("login", "")):
+            if body.startswith(_CHAT_REPLY):
+                turns.append({"role": "assistant", "content": body.partition("\n\n")[2].strip()})
+            continue
+        for command in parse_commands(body):
+            if command.name == "chat" and command.args.strip():
+                turns.append({"role": "user", "content": command.args.strip()})
+    kept: List[Dict[str, str]] = []
+    budget = limit
+    for turn in reversed(turns[-MAX_CHAT_TURNS:]):
+        budget -= len(turn["content"])
+        if budget < 0:
+            break
+        kept.append(turn)
+    # The model expects a question first.
+    while kept and kept[-1]["role"] == "assistant":
+        kept.pop()
+    return list(reversed(kept))
+
+
+def _chat(gh: GitHubClient, ai: AIClient, t: Target, args: str) -> str:
+    """A back-and-forth with the model, with the earlier ``/chat`` turns as context."""
+    history = chat_turns(gh.issue_comments(t.repo, t.number), MAX_CONTEXT // 2)
+    # The comment that asked this question is usually in the thread already.
+    if history and history[-1] == {"role": "user", "content": args.strip()}:
+        history.pop()
+    system = _system(t.repo, "Chat with the people in this thread about the issue or "
+                             "pull request below, following on from the earlier turns.")
+    system += "\n\n" + clip(_opening_post(gh, t), MAX_CONTEXT // 2)
+    return ai.complete([{"role": "system", "content": system}, *history,
+                        {"role": "user", "content": args.strip()}])
+
+
 AI_HANDLERS: Dict[str, AICommand] = {
     "ask": AICommand(_ask, "Usage: `:tide /ask where is auth handled?`"),
     "summarize": AICommand(_summarize),
@@ -361,6 +408,7 @@ AI_HANDLERS: Dict[str, AICommand] = {
     "estimate": AICommand(_estimate),
     "checklist": AICommand(_checklist),
     "roast": AICommand(_roast),
+    "chat": AICommand(_chat, "Usage: `:tide /chat how should I test this?`"),
 }
 
 

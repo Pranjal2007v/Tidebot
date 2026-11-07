@@ -431,3 +431,48 @@ def test_roast_needs_a_pr():
     ai = FakeAI()
     assert run(FakeGitHub(), ai, "roast")[3].endswith("`/roast` works on pull requests only.")
     assert ai.prompts == []
+
+
+class ChatAI(FakeAI):
+    def complete(self, messages, **kwargs):
+        self.messages = messages
+        return self.answer
+
+
+CHAT_THREAD = [
+    {"user": {"login": "tidebot[bot]"}, "body": "Welcome!"},
+    {"user": {"login": "alice"}, "body": ":tide /chat where does the token come from?"},
+    {"user": {"login": "tidebot[bot]"}, "body": "`/chat` for @alice:\n\nFrom `auth.py`."},
+    {"user": {"login": "bob"}, "body": "unrelated comment"},
+    {"user": {"login": "alice"}, "body": ":tide /chat and who refreshes it?"},
+]
+
+
+def test_chat_turns_pair_questions_with_tidebot_answers():
+    from tidebot.aicommands import chat_turns
+    assert chat_turns(CHAT_THREAD) == [
+        {"role": "user", "content": "where does the token come from?"},
+        {"role": "assistant", "content": "From `auth.py`."},
+        {"role": "user", "content": "and who refreshes it?"},
+    ]
+    # When only the latest fit, an answer is never left first.
+    assert chat_turns(CHAT_THREAD, limit=40) == [
+        {"role": "user", "content": "and who refreshes it?"}]
+
+
+def test_chat_sends_earlier_turns_without_repeating_the_question():
+    gh, ai = FakeGitHub(comments=CHAT_THREAD), ChatAI("The refresh job does.")
+    call = run(gh, ai, "chat and who refreshes it?")
+    assert call[3] == "`/chat` for @alice:\n\nThe refresh job does."
+    system, *turns = ai.messages
+    assert system["role"] == "system" and "Issue #4: Login fails" in system["content"]
+    assert turns == [
+        {"role": "user", "content": "where does the token come from?"},
+        {"role": "assistant", "content": "From `auth.py`."},
+        {"role": "user", "content": "and who refreshes it?"},
+    ]
+
+
+def test_chat_needs_a_message():
+    assert usage_error(Command("chat")) == "Usage: `:tide /chat how should I test this?`"
+    assert usage_error(Command("chat", "hi")) is None

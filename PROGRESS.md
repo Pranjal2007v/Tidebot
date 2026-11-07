@@ -258,3 +258,29 @@ The spec is [README.md](README.md). Work follows its [Roadmap](README.md#roadmap
 | B | bitflicker64 | himnshuverma10152006@gmail.com | `52da842bcd2564746af9721ee1ea2411f01f07cc` | feat: add /security and /perf as focused passes of the review pipeline |
 | C | Payal-Phougat | 226825128+Payal-Phougat@users.noreply.github.com | `7ee9f5f74c2e9f3a09a6486ba299bd02178a821d` | feat: add /docs to suggest missing doc comments on a PR |
 | D | Pranjal2007v | pranjalgangwar910@gmail.com | `bbea0bc90be32ab2094abc17ca7a1a68497d562a` | feat: add /test to list the test cases a PR still needs |
+
+## Run 11 (2026-11-07)
+
+**Estimated complete:** 55%
+
+**Added**
+
+- `/changelog` on a PR: one release-note line written for users, from the title, description, changed file names and diff. The answer is trimmed to its first line, made into a bullet and ends with the PR number. `/estimate` gives a rough size (XS to XL), a time and up to three reasons for an issue, or how long a PR takes to review using its line counts. Text after it is passed on as an assumption.
+- `/checklist`: a reviewer's checklist for a PR (from its thread and diff) or a definition of done for an issue. The model's list items, numbered or bulleted, become unticked GitHub task-list lines, at most ten. If the answer holds no list, it is posted as it came.
+- `/roast` on a PR: three to five friendly lines about the code, naming or size, never about the author, ending with something the PR does well and a pointer to `/review`.
+- `/chat <message>`: a back-and-forth in the thread. Earlier `/chat` questions and Tidebot's `/chat` answers in the same thread go to the model as turns (the last ten that fit), with the issue or PR as background. The comment that asked the question isn't sent twice.
+- Every command in [AI commands](README.md#ai-commands-14) now runs, so the core bot and AI items in the [Roadmap](README.md#roadmap) are ticked.
+
+**Next 5%**
+
+- The website from [Website](README.md#website), starting with a static `site/` folder: the landing page with what Tidebot does, an example comment thread and an "Install on GitHub" button.
+- The command reference page, generated from the command list and permission tiers in the code so it can't drift, with who can run each command and an example, and a search box.
+
+**Blockers:** none. Still not run against a live GitHub App or a real model endpoint; API and model calls are covered by mocked tests. Tests need the project's `.venv`; the default `python` on this machine lacks `httpx`.
+
+| Commit | GitHub | Email | SHA | Message |
+|---|---|---|---|---|
+| A | bitflicker64 | himnshuverma10152006@gmail.com | `1b6b03bd5bfe0cc19d5b5aa3a50644182f48c431` | feat: add /changelog and /estimate AI commands |
+| B | Payal-Phougat | 226825128+Payal-Phougat@users.noreply.github.com | `8a73ca1ffd432d76d8a29ad52d2d0674f77081c4` | feat: add /checklist as a GitHub task list for issues and PRs |
+| C | Pranjal2007v | pranjalgangwar910@gmail.com | `94f5114657c8ee28b6b4eb686f93452adb332e9d` | feat: add /roast, a friendly take on a PR that stays about the code |
+| D | ishitasharma2490 | ishitasharma2490@gmail.com | *(this commit, filled in next run)* | feat: add /chat with earlier turns in the thread as context |
