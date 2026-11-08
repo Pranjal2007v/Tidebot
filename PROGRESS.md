@@ -284,3 +284,28 @@ The spec is [README.md](README.md). Work follows its [Roadmap](README.md#roadmap
 | B | Payal-Phougat | 226825128+Payal-Phougat@users.noreply.github.com | `8a73ca1ffd432d76d8a29ad52d2d0674f77081c4` | feat: add /checklist as a GitHub task list for issues and PRs |
 | C | Pranjal2007v | pranjalgangwar910@gmail.com | `94f5114657c8ee28b6b4eb686f93452adb332e9d` | feat: add /roast, a friendly take on a PR that stays about the code |
 | D | ishitasharma2490 | ishitasharma2490@gmail.com | `be87d2f4d8cef9bb863e9bd3470ccc35f16fcbe5` | feat: add /chat with earlier turns in the thread as context |
+
+## Run 12 (2026-11-08)
+
+**Estimated complete:** 60%
+
+**Added**
+
+- `site/`, the start of the [Website](README.md#website): a static landing page (`index.html`) with what Tidebot does, an example comment thread and an "Install on GitHub" button, plus a shared `style.css` with a dark mode. The install link points at `github.com/apps/tidebot`, a placeholder until the GitHub App is registered under its final name.
+- `tidebot/catalog.py`: every command with a one-line summary, an example and what Tidebot does or replies. The group comes from `commands.py` and the tier from `permissions.py`, and a test fails if a command is missing or an example doesn't parse back to its own command.
+- `tidebot/sitegen.py` writes `site/commands.html` from the catalog (`python -m tidebot.sitegen`), one card per command with an anchor, the tier who can run it, an example and its result. A test fails when the committed page is stale, and another checks every local link on the site resolves.
+- Search on the command reference (`site/search.js`): type words to filter the cards, or pick a tier to see only what that tier can run. Groups with no match are hidden and an empty search says so.
+
+**Next 5%**
+
+- The config builder from [Website](README.md#website): toggles for every `.tide.yml` option, generated from the defaults in `tidebot/config.py`, with the YAML shown live and a copy button.
+- Then the dashboard: start with a JSON endpoint in `tidebot/app.py` that reports per-repo commands run, queue wait times, reviews posted and duplicates caught from the state file.
+
+**Blockers:** none. The site hasn't been opened in a browser yet; the markup, links and filter attributes are covered by tests and `search.js` passes `node --check`. Still not run against a live GitHub App or a real model endpoint.
+
+| Commit | GitHub | Email | SHA | Message |
+|---|---|---|---|---|
+| A | Payal-Phougat | 226825128+Payal-Phougat@users.noreply.github.com | `ddbae0580eb35f525ffe4a061a46ee6cd9fa8dd3` | feat: add the website landing page with an example comment thread |
+| B | Pranjal2007v | pranjalgangwar910@gmail.com | `4dff47fc850c3cb73f48bf6cee6306496a886517` | feat: add a command catalog with tiers and examples for the website |
+| C | ishitasharma2490 | ishitasharma2490@gmail.com | `3dcd6594921c2a9f1c6469dca620441738a687ed` | feat: generate the command reference page from the command catalog |
+| D | bitflicker64 | himnshuverma10152006@gmail.com | *(this commit, filled in next run)* | feat: add search and a tier filter to the command reference |

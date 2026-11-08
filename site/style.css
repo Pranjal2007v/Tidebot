@@ -102,3 +102,13 @@ footer { border-top: 1px solid var(--border); padding: 24px 0 40px; color: var(-
 .command .result { color: var(--muted); margin: 0; }
 .command .note { color: var(--muted); font-size: 0.9rem; margin: 8px 0 0; }
 .tier { font-size: 0.75rem; font-weight: 600; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--border); color: var(--muted); }
+
+.filters { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: 0 0 24px; }
+.filters label { color: var(--muted); font-size: 0.9rem; }
+.filters input, .filters select {
+  font: inherit; color: var(--text); background: var(--surface);
+  border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px;
+}
+.filters input { flex: 1 1 220px; min-width: 0; }
+[hidden] { display: none !important; }
+#no-results { color: var(--muted); }

@@ -12,7 +12,9 @@ import sys
 from pathlib import Path
 from typing import List
 
-from .catalog import Entry, entries
+from .catalog import Entry, entries, tiers
+from .commands import Command
+from .permissions import required_tier
 
 SITE = Path(__file__).resolve().parent.parent / "site"
 OUTPUT = SITE / "commands.html"
@@ -30,10 +32,12 @@ def inline(text: str) -> str:
 
 def _row(entry: Entry) -> List[str]:
     search = " ".join([entry.name, entry.group, entry.tier, entry.summary]).lower()
+    # The lowest tier that can run the command at all, for the tier filter.
+    level = int(required_tier(Command(entry.name), ""))
     bare = (f'<p class="note">Collaborators can also write a bare <code>/{entry.name}</code> '
             "on its own line.</p>") if entry.bare else ""
     return [
-        f'      <article class="command" id="{entry.name}" data-tier="{html.escape(entry.tier)}" '
+        f'      <article class="command" id="{entry.name}" data-level="{level}" '
         f'data-search="{html.escape(search)}">',
         f'        <h3><a href="#{entry.name}">/{entry.name}</a> '
         f'<span class="tier">{html.escape(entry.tier)}</span></h3>',
@@ -74,6 +78,17 @@ def render() -> str:
         f"      <p>{len(all_entries)} commands in three groups. Start a line with "
         "<code>:tide</code>, then the command.</p>",
         "    </div>",
+        '    <form class="filters" role="search" onsubmit="return false">',
+        '      <label for="search">Search</label>',
+        '      <input type="search" id="search" placeholder="merge, review, label..." autocomplete="off">',
+        '      <label for="tier">Commands I can run as</label>',
+        '      <select id="tier">',
+        '        <option value="">show all</option>',
+        *[f'        <option value="{i}">{name}</option>' for i, name in enumerate(tiers())],
+        "      </select>",
+        "    </form>",
+        '    <p id="no-results" hidden>No command matches that search.</p>',
+        "",
     ]
     group = None
     for entry in all_entries:
@@ -93,6 +108,7 @@ def render() -> str:
         'See <a href="https://github.com/Pranjal2007v/Tidebot#permissions">Permissions</a> '
         "for what each tier means.</div>",
         "  </footer>",
+        '  <script src="search.js"></script>',
         "</body>",
         "</html>",
         "",

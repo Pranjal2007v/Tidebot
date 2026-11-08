@@ -70,3 +70,18 @@ def test_command_reference_lists_every_command_with_an_anchor():
 def test_inline_escapes_html_and_formats_code():
     from tidebot.sitegen import inline
     assert inline("use `<b>` & **bold**") == "use <code>&lt;b&gt;</code> &amp; <strong>bold</strong>"
+
+
+def test_command_reference_has_search_and_tier_filter():
+    page = _parse("commands.html")
+    assert {"search", "tier", "no-results"} <= page.ids
+    assert "search.js" in page.links
+
+
+def test_tier_levels_match_who_can_run_each_command():
+    import re
+    text = (SITE / "commands.html").read_text(encoding="utf-8")
+    levels = dict(re.findall(r'id="([\w-]+)" data-level="(\d)"', text))
+    assert levels["ask"] == "0" and levels["help"] == "0"
+    assert levels["lgtm"] == "1" and levels["assign"] == "1"
+    assert levels["merge"] == "2" and levels["label"] == "2"
