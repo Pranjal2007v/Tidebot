@@ -283,4 +283,4 @@ The spec is [README.md](README.md). Work follows its [Roadmap](README.md#roadmap
 | A | bitflicker64 | himnshuverma10152006@gmail.com | `1b6b03bd5bfe0cc19d5b5aa3a50644182f48c431` | feat: add /changelog and /estimate AI commands |
 | B | Payal-Phougat | 226825128+Payal-Phougat@users.noreply.github.com | `8a73ca1ffd432d76d8a29ad52d2d0674f77081c4` | feat: add /checklist as a GitHub task list for issues and PRs |
 | C | Pranjal2007v | pranjalgangwar910@gmail.com | `94f5114657c8ee28b6b4eb686f93452adb332e9d` | feat: add /roast, a friendly take on a PR that stays about the code |
-| D | ishitasharma2490 | ishitasharma2490@gmail.com | *(this commit, filled in next run)* | feat: add /chat with earlier turns in the thread as context |
+| D | ishitasharma2490 | ishitasharma2490@gmail.com | `be87d2f4d8cef9bb863e9bd3470ccc35f16fcbe5` | feat: add /chat with earlier turns in the thread as context |

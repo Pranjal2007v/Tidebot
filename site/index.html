@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Tidebot</title>
+  <meta name="description" content="A maintainer's assistant for GitHub: labeling, duplicate checks, first-pass code review, reminders and merging.">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="top">
+    <div class="wrap">
+      <a class="brand" href="index.html">Tidebot</a>
+      <nav>
+        <a href="https://github.com/Pranjal2007v/Tidebot">GitHub</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <div class="hero">
+      <h1>A maintainer's assistant for GitHub</h1>
+      <p>Tidebot handles the repetitive chores of running an open-source repo: labeling,
+        duplicate checks, first-pass code review, reminders and merging. You spend your time
+        on the work that matters.</p>
+      <a class="button" id="install" href="https://github.com/apps/tidebot/installations/new">Install on GitHub</a>
+    </div>
+
+    <section id="features">
+      <h2>What it does</h2>
+      <div class="features">
+        <div class="feature">
+          <h3>Triage new issues</h3>
+          <p>Labels each issue by content, adds <code>triage</code> until a maintainer looks,
+            and flags likely duplicates among open issues.</p>
+        </div>
+        <div class="feature">
+          <h3>First pass on every PR</h3>
+          <p>Adds a size label, lints the title and description, and assigns reviewers by
+            code area.</p>
+        </div>
+        <div class="feature">
+          <h3>Code review on request</h3>
+          <p><code>/review-sc</code> posts up to 12 inline suggested changes, each checked
+            against the real lines in the file.</p>
+        </div>
+        <div class="feature">
+          <h3>Merge when it's ready</h3>
+          <p><code>/merge</code> waits for green CI and an approval. <code>/hold</code> and
+            <code>/wip</code> keep a PR out until you lift them.</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="example">
+      <h2>How it looks in a thread</h2>
+      <p>Start a line with <code>:tide</code>, not an @mention, so nobody gets pinged by accident.</p>
+      <div class="thread">
+        <div class="comment">
+          <div class="meta"><strong>maria</strong> commented</div>
+          <div class="body"><p><code>:tide /size</code></p></div>
+        </div>
+        <div class="comment bot">
+          <div class="meta"><strong>tidebot</strong> commented</div>
+          <div class="body"><p>This PR changes 84 lines: <code>size/M</code>.</p></div>
+        </div>
+        <div class="comment">
+          <div class="meta"><strong>maria</strong> commented</div>
+          <div class="body"><p><code>:tide /merge squash</code></p></div>
+        </div>
+        <div class="comment bot">
+          <div class="meta"><strong>tidebot</strong> commented</div>
+          <div class="body"><p>Not merging: it has no approval; CI is still running.</p></div>
+        </div>
+        <div class="comment">
+          <div class="meta"><strong>sam</strong> commented</div>
+          <div class="body"><p><code>/lgtm</code></p></div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="wrap">Tidebot is in early development. Feedback on the command list is welcome on
+      <a href="https://github.com/Pranjal2007v/Tidebot/issues">GitHub</a>.</div>
+  </footer>
+</body>
+</html>
