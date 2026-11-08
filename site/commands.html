@@ -1,0 +1,266 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Tidebot commands</title>
+  <meta name="description" content="Every Tidebot command, who can run it and an example.">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="top">
+    <div class="wrap">
+      <a class="brand" href="index.html">Tidebot</a>
+      <nav>
+        <a href="commands.html">Commands</a>
+        <a href="https://github.com/Pranjal2007v/Tidebot">GitHub</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <div class="hero">
+      <h1>Commands</h1>
+      <p>37 commands in three groups. Start a line with <code>:tide</code>, then the command.</p>
+    </div>
+    <section class="group" id="group-ai">
+      <h2>AI</h2>
+      <article class="command" id="ask" data-tier="Anyone" data-search="ask ai anyone answer a question using the issue or pr thread as context.">
+        <h3><a href="#ask">/ask</a> <span class="tier">Anyone</span></h3>
+        <p>Answer a question using the issue or PR thread as context.</p>
+        <pre><code>:tide /ask where is auth handled?</code></pre>
+        <p class="result">A short answer that points at the files or comments it used.</p>
+      </article>
+      <article class="command" id="changelog" data-tier="Anyone" data-search="changelog ai anyone write a release-note line for the pr.">
+        <h3><a href="#changelog">/changelog</a> <span class="tier">Anyone</span></h3>
+        <p>Write a release-note line for the PR.</p>
+        <pre><code>:tide /changelog</code></pre>
+        <p class="result">- Reminders can now be cancelled with <code>/remind cancel</code> (#42)</p>
+      </article>
+      <article class="command" id="chat" data-tier="Anyone" data-search="chat ai anyone talk with the model in the thread, with earlier `/chat` turns as context.">
+        <h3><a href="#chat">/chat</a> <span class="tier">Anyone</span></h3>
+        <p>Talk with the model in the thread, with earlier <code>/chat</code> turns as context.</p>
+        <pre><code>:tide /chat would a cache help here?</code></pre>
+        <p class="result">A reply that follows on from the earlier turns.</p>
+      </article>
+      <article class="command" id="checklist" data-tier="Anyone" data-search="checklist ai anyone make a review checklist for a pr or a definition of done for an issue.">
+        <h3><a href="#checklist">/checklist</a> <span class="tier">Anyone</span></h3>
+        <p>Make a review checklist for a PR or a definition of done for an issue.</p>
+        <pre><code>:tide /checklist</code></pre>
+        <p class="result">A GitHub task list of up to ten unticked items.</p>
+      </article>
+      <article class="command" id="docs" data-tier="Anyone" data-search="docs ai anyone suggest missing or outdated doc comments in the pr.">
+        <h3><a href="#docs">/docs</a> <span class="tier">Anyone</span></h3>
+        <p>Suggest missing or outdated doc comments in the PR.</p>
+        <pre><code>:tide /docs</code></pre>
+        <p class="result">Suggested docstrings, and a note when code changed but no docs did.</p>
+      </article>
+      <article class="command" id="estimate" data-tier="Anyone" data-search="estimate ai anyone give a rough size and effort for an issue or pr.">
+        <h3><a href="#estimate">/estimate</a> <span class="tier">Anyone</span></h3>
+        <p>Give a rough size and effort for an issue or PR.</p>
+        <pre><code>:tide /estimate assuming no API changes</code></pre>
+        <p class="result"><strong>M</strong>, about a day, with up to three reasons.</p>
+      </article>
+      <article class="command" id="explain" data-tier="Anyone" data-search="explain ai anyone explain a pr&#x27;s change from its diff, or an issue in plain words.">
+        <h3><a href="#explain">/explain</a> <span class="tier">Anyone</span></h3>
+        <p>Explain a PR's change from its diff, or an issue in plain words.</p>
+        <pre><code>:tide /explain</code></pre>
+        <p class="result">A plain-language walk through what changes and why.</p>
+      </article>
+      <article class="command" id="perf" data-tier="Anyone" data-search="perf ai anyone look only for performance problems in the changed files.">
+        <h3><a href="#perf">/perf</a> <span class="tier">Anyone</span></h3>
+        <p>Look only for performance problems in the changed files.</p>
+        <pre><code>:tide /perf</code></pre>
+        <p class="result">Findings such as repeated work in loops or quadratic searches.</p>
+      </article>
+      <article class="command" id="review" data-tier="Anyone" data-search="review ai anyone run the review pipeline and post the findings in one comment.">
+        <h3><a href="#review">/review</a> <span class="tier">Anyone</span></h3>
+        <p>Run the review pipeline and post the findings in one comment.</p>
+        <pre><code>:tide /review</code></pre>
+        <p class="result">A memo on what the PR does, then each verified finding by file.</p>
+      </article>
+      <article class="command" id="review-sc" data-tier="Anyone" data-search="review-sc ai anyone review the pr and post up to 12 findings as inline suggested changes.">
+        <h3><a href="#review-sc">/review-sc</a> <span class="tier">Anyone</span></h3>
+        <p>Review the PR and post up to 12 findings as inline suggested changes.</p>
+        <pre><code>:tide /review-sc</code></pre>
+        <p class="result">One PR review with suggestions you can commit from the diff view.</p>
+      </article>
+      <article class="command" id="roast" data-tier="Anyone" data-search="roast ai anyone a light-hearted take on the pr&#x27;s code, never on the people behind it.">
+        <h3><a href="#roast">/roast</a> <span class="tier">Anyone</span></h3>
+        <p>A light-hearted take on the PR's code, never on the people behind it.</p>
+        <pre><code>:tide /roast</code></pre>
+        <p class="result">Three to five friendly lines, ending with something the PR does well.</p>
+      </article>
+      <article class="command" id="security" data-tier="Anyone" data-search="security ai anyone look only for security problems in the changed files.">
+        <h3><a href="#security">/security</a> <span class="tier">Anyone</span></h3>
+        <p>Look only for security problems in the changed files.</p>
+        <pre><code>:tide /security</code></pre>
+        <p class="result">Findings such as injection, path traversal or secrets in code.</p>
+      </article>
+      <article class="command" id="summarize" data-tier="Anyone" data-search="summarize ai anyone summarize a long issue or pr thread.">
+        <h3><a href="#summarize">/summarize</a> <span class="tier">Anyone</span></h3>
+        <p>Summarize a long issue or PR thread.</p>
+        <pre><code>:tide /summarize</code></pre>
+        <p class="result">A few lines on where the discussion stands and what is still open.</p>
+      </article>
+      <article class="command" id="test" data-tier="Anyone" data-search="test ai anyone list the test cases the pr&#x27;s code changes still need.">
+        <h3><a href="#test">/test</a> <span class="tier">Anyone</span></h3>
+        <p>List the test cases the PR's code changes still need.</p>
+        <pre><code>:tide /test edge cases for the parser</code></pre>
+        <p class="result">Up to eight test cases, each with a file, a name and what it checks.</p>
+      </article>
+    </section>
+
+    <section class="group" id="group-workflow">
+      <h2>Workflow</h2>
+      <article class="command" id="approve" data-tier="Maintainer" data-search="approve workflow maintainer approve the pr as a github review.">
+        <h3><a href="#approve">/approve</a> <span class="tier">Maintainer</span></h3>
+        <p>Approve the PR as a GitHub review.</p>
+        <pre><code>:tide /approve</code></pre>
+        <p class="result">An approving review is posted.</p>
+      </article>
+      <article class="command" id="assign" data-tier="Collaborator (self), Maintainer (others)" data-search="assign workflow collaborator (self), maintainer (others) assign yourself, or (as a maintainer) anyone else.">
+        <h3><a href="#assign">/assign</a> <span class="tier">Collaborator (self), Maintainer (others)</span></h3>
+        <p>Assign yourself, or (as a maintainer) anyone else.</p>
+        <pre><code>:tide /assign @me</code></pre>
+        <p class="result">The issue is assigned; no reply.</p>
+      </article>
+      <article class="command" id="cc" data-tier="Collaborator" data-search="cc workflow collaborator ask someone to look: a review request on a pr, a mention on an issue.">
+        <h3><a href="#cc">/cc</a> <span class="tier">Collaborator</span></h3>
+        <p>Ask someone to look: a review request on a PR, a mention on an issue.</p>
+        <pre><code>:tide /cc @alice</code></pre>
+        <p class="result">cc @alice</p>
+      </article>
+      <article class="command" id="close" data-tier="Maintainer" data-search="close workflow maintainer close the issue or pr.">
+        <h3><a href="#close">/close</a> <span class="tier">Maintainer</span></h3>
+        <p>Close the issue or PR.</p>
+        <pre><code>:tide /close</code></pre>
+        <p class="result">It is closed; no reply.</p>
+      </article>
+      <article class="command" id="duplicate" data-tier="Maintainer" data-search="duplicate workflow maintainer mark the issue as a duplicate of another and close it.">
+        <h3><a href="#duplicate">/duplicate</a> <span class="tier">Maintainer</span></h3>
+        <p>Mark the issue as a duplicate of another and close it.</p>
+        <pre><code>:tide /duplicate #123</code></pre>
+        <p class="result">Duplicate of #123</p>
+      </article>
+      <article class="command" id="hold" data-tier="Collaborator" data-search="hold workflow collaborator block a merge with `do-not-merge/hold`, or `cancel` to lift it.">
+        <h3><a href="#hold">/hold</a> <span class="tier">Collaborator</span></h3>
+        <p>Block a merge with <code>do-not-merge/hold</code>, or <code>cancel</code> to lift it.</p>
+        <pre><code>:tide /hold</code></pre>
+        <p class="result">The hold label is added; no reply.</p>
+      </article>
+      <article class="command" id="label" data-tier="Maintainer" data-search="label workflow maintainer add labels, or remove one with a leading minus.">
+        <h3><a href="#label">/label</a> <span class="tier">Maintainer</span></h3>
+        <p>Add labels, or remove one with a leading minus.</p>
+        <pre><code>:tide /label bug -question</code></pre>
+        <p class="result">Labels are updated; no reply.</p>
+      </article>
+      <article class="command" id="lgtm" data-tier="Collaborator" data-search="lgtm workflow collaborator add the `lgtm` label to a pr, or `cancel` to remove it.">
+        <h3><a href="#lgtm">/lgtm</a> <span class="tier">Collaborator</span></h3>
+        <p>Add the <code>lgtm</code> label to a PR, or <code>cancel</code> to remove it.</p>
+        <pre><code>:tide /lgtm</code></pre>
+        <p class="result">The <code>lgtm</code> label is added; no reply.</p>
+        <p class="note">Collaborators can also write a bare <code>/lgtm</code> on its own line.</p>
+      </article>
+      <article class="command" id="lock" data-tier="Maintainer" data-search="lock workflow maintainer lock the conversation, with an optional reason, or `cancel` to unlock.">
+        <h3><a href="#lock">/lock</a> <span class="tier">Maintainer</span></h3>
+        <p>Lock the conversation, with an optional reason, or <code>cancel</code> to unlock.</p>
+        <pre><code>:tide /lock resolved</code></pre>
+        <p class="result">The conversation is locked; no reply.</p>
+      </article>
+      <article class="command" id="merge" data-tier="Maintainer" data-search="merge workflow maintainer merge the pr once ci is green and it has an approval.">
+        <h3><a href="#merge">/merge</a> <span class="tier">Maintainer</span></h3>
+        <p>Merge the PR once CI is green and it has an approval.</p>
+        <pre><code>:tide /merge squash</code></pre>
+        <p class="result">Not merging: it has no approval; CI is still running.</p>
+      </article>
+      <article class="command" id="milestone" data-tier="Maintainer" data-search="milestone workflow maintainer set the milestone, or `clear` it.">
+        <h3><a href="#milestone">/milestone</a> <span class="tier">Maintainer</span></h3>
+        <p>Set the milestone, or <code>clear</code> it.</p>
+        <pre><code>:tide /milestone v1.0</code></pre>
+        <p class="result">The milestone is set; no reply.</p>
+      </article>
+      <article class="command" id="reopen" data-tier="Maintainer" data-search="reopen workflow maintainer reopen a closed issue or pr.">
+        <h3><a href="#reopen">/reopen</a> <span class="tier">Maintainer</span></h3>
+        <p>Reopen a closed issue or PR.</p>
+        <pre><code>:tide /reopen</code></pre>
+        <p class="result">It is reopened; no reply.</p>
+      </article>
+      <article class="command" id="retitle" data-tier="Maintainer" data-search="retitle workflow maintainer change the title.">
+        <h3><a href="#retitle">/retitle</a> <span class="tier">Maintainer</span></h3>
+        <p>Change the title.</p>
+        <pre><code>:tide /retitle Fix crash when the config file is empty</code></pre>
+        <p class="result">The title is changed; no reply.</p>
+      </article>
+      <article class="command" id="ship" data-tier="Maintainer" data-search="ship workflow maintainer approve and merge in one step, if nothing else blocks the merge.">
+        <h3><a href="#ship">/ship</a> <span class="tier">Maintainer</span></h3>
+        <p>Approve and merge in one step, if nothing else blocks the merge.</p>
+        <pre><code>:tide /ship</code></pre>
+        <p class="result">The PR is approved and merged.</p>
+      </article>
+      <article class="command" id="wip" data-tier="Collaborator" data-search="wip workflow collaborator mark a pr as work in progress, or `cancel` when it&#x27;s ready.">
+        <h3><a href="#wip">/wip</a> <span class="tier">Collaborator</span></h3>
+        <p>Mark a PR as work in progress, or <code>cancel</code> when it's ready.</p>
+        <pre><code>:tide /wip</code></pre>
+        <p class="result">The <code>do-not-merge/wip</code> label is added; no reply.</p>
+      </article>
+    </section>
+
+    <section class="group" id="group-community">
+      <h2>Community</h2>
+      <article class="command" id="help" data-tier="Anyone" data-search="help community anyone list the commands you can run here.">
+        <h3><a href="#help">/help</a> <span class="tier">Anyone</span></h3>
+        <p>List the commands you can run here.</p>
+        <pre><code>:tide /help</code></pre>
+        <p class="result">The commands your access level allows, by group.</p>
+      </article>
+      <article class="command" id="joke" data-tier="Anyone" data-search="joke community anyone tell a programming joke.">
+        <h3><a href="#joke">/joke</a> <span class="tier">Anyone</span></h3>
+        <p>Tell a programming joke.</p>
+        <pre><code>:tide /joke</code></pre>
+        <p class="result">It works on my machine. Then we'll ship your machine.</p>
+      </article>
+      <article class="command" id="kudos" data-tier="Anyone" data-search="kudos community anyone thank someone, with a count of how often they&#x27;ve been thanked here.">
+        <h3><a href="#kudos">/kudos</a> <span class="tier">Anyone</span></h3>
+        <p>Thank someone, with a count of how often they've been thanked here.</p>
+        <pre><code>:tide /kudos @alice for the quick fix</code></pre>
+        <p class="result">Kudos to @alice from @bob for the quick fix</p>
+      </article>
+      <article class="command" id="ping" data-tier="Anyone" data-search="ping community anyone check that tidebot is listening.">
+        <h3><a href="#ping">/ping</a> <span class="tier">Anyone</span></h3>
+        <p>Check that Tidebot is listening.</p>
+        <pre><code>:tide /ping</code></pre>
+        <p class="result">pong</p>
+      </article>
+      <article class="command" id="remind" data-tier="Collaborator" data-search="remind community collaborator set a reminder in this thread, from 1 minute to 30 days ahead.">
+        <h3><a href="#remind">/remind</a> <span class="tier">Collaborator</span></h3>
+        <p>Set a reminder in this thread, from 1 minute to 30 days ahead.</p>
+        <pre><code>:tide /remind 2h check the flaky test</code></pre>
+        <p class="result">OK @bob, I'll remind you here in 2h.</p>
+      </article>
+      <article class="command" id="size" data-tier="Anyone" data-search="size community anyone label the pr by how many lines it changes.">
+        <h3><a href="#size">/size</a> <span class="tier">Anyone</span></h3>
+        <p>Label the PR by how many lines it changes.</p>
+        <pre><code>:tide /size</code></pre>
+        <p class="result">This PR changes 84 lines: <code>size/M</code>.</p>
+      </article>
+      <article class="command" id="stats" data-tier="Anyone" data-search="stats community anyone show how tidebot is used in this repo.">
+        <h3><a href="#stats">/stats</a> <span class="tier">Anyone</span></h3>
+        <p>Show how Tidebot is used in this repo.</p>
+        <pre><code>:tide /stats</code></pre>
+        <p class="result"><strong>Tidebot in owner/repo:</strong> 128 commands run. Most used: <code>/lgtm</code> 40, ...</p>
+      </article>
+      <article class="command" id="vote" data-tier="Collaborator" data-search="vote community collaborator open a yes/no vote, cast a ballot, show the count or `close` it.">
+        <h3><a href="#vote">/vote</a> <span class="tier">Collaborator</span></h3>
+        <p>Open a yes/no vote, cast a ballot, show the count or <code>close</code> it.</p>
+        <pre><code>:tide /vote Should we drop Python 3.8?</code></pre>
+        <p class="result">Vote opened: <strong>Should we drop Python 3.8?</strong></p>
+      </article>
+    </section>
+  </main>
+
+  <footer>
+    <div class="wrap">Generated from the command list in the Tidebot source. See <a href="https://github.com/Pranjal2007v/Tidebot#permissions">Permissions</a> for what each tier means.</div>
+  </footer>
+</body>
+</html>

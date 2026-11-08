@@ -91,3 +91,14 @@ footer { border-top: 1px solid var(--border); padding: 24px 0 40px; color: var(-
   header.top nav a { margin-left: 12px; }
   .button.secondary { margin: 8px 0 0; }
 }
+
+.group { padding-top: 8px; }
+.command { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 16px 20px; margin-bottom: 12px; }
+.command h3 { margin: 0 0 6px; font-size: 1.1rem; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.command h3 a { color: var(--text); text-decoration: none; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.command p { margin: 0 0 8px; }
+.command pre { margin: 0 0 8px; padding: 8px 12px; background: var(--code-bg); border-radius: 6px; overflow-x: auto; }
+.command pre code { background: none; padding: 0; }
+.command .result { color: var(--muted); margin: 0; }
+.command .note { color: var(--muted); font-size: 0.9rem; margin: 8px 0 0; }
+.tier { font-size: 0.75rem; font-weight: 600; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--border); color: var(--muted); }

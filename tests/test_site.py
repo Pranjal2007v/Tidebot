@@ -52,3 +52,21 @@ def test_every_page_has_a_title_and_viewport():
     for page in _pages():
         text = (SITE / page).read_text(encoding="utf-8")
         assert "<title>" in text and 'name="viewport"' in text, page
+
+
+def test_command_reference_is_up_to_date():
+    from tidebot.sitegen import OUTPUT, render
+    assert OUTPUT.read_text(encoding="utf-8") == render(), \
+        "site/commands.html is stale; run python -m tidebot.sitegen"
+
+
+def test_command_reference_lists_every_command_with_an_anchor():
+    from tidebot.commands import ALL_COMMANDS
+    page = _parse("commands.html")
+    assert ALL_COMMANDS <= page.ids
+    assert {"group-ai", "group-workflow", "group-community"} <= page.ids
+
+
+def test_inline_escapes_html_and_formats_code():
+    from tidebot.sitegen import inline
+    assert inline("use `<b>` & **bold**") == "use <code>&lt;b&gt;</code> &amp; <strong>bold</strong>"
