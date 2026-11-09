@@ -308,4 +308,4 @@ The spec is [README.md](README.md). Work follows its [Roadmap](README.md#roadmap
 | A | Payal-Phougat | 226825128+Payal-Phougat@users.noreply.github.com | `ddbae0580eb35f525ffe4a061a46ee6cd9fa8dd3` | feat: add the website landing page with an example comment thread |
 | B | Pranjal2007v | pranjalgangwar910@gmail.com | `4dff47fc850c3cb73f48bf6cee6306496a886517` | feat: add a command catalog with tiers and examples for the website |
 | C | ishitasharma2490 | ishitasharma2490@gmail.com | `3dcd6594921c2a9f1c6469dca620441738a687ed` | feat: generate the command reference page from the command catalog |
-| D | bitflicker64 | himnshuverma10152006@gmail.com | *(this commit, filled in next run)* | feat: add search and a tier filter to the command reference |
+| D | bitflicker64 | himnshuverma10152006@gmail.com | `1898bd913285f13d89ce930ca5398fbc6bc662c7` | feat: add search and a tier filter to the command reference |

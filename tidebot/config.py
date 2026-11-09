@@ -14,8 +14,10 @@ who review them, in CODEOWNERS pattern syntax::
 
 from __future__ import annotations
 
-from dataclasses import dataclass, fields
-from typing import Any, Mapping, Optional, Tuple
+import json
+
+from dataclasses import asdict, dataclass, fields
+from typing import Any, List, Mapping, NamedTuple, Optional, Tuple
 
 import yaml
 
@@ -60,6 +62,41 @@ def _reviewer_rules(value: Any) -> Tuple[Rule, ...]:
         owners = tuple("@" + p.lstrip("@") for p in people if isinstance(p, str) and p.strip("@"))
         rules.append((pattern, owners))
     return tuple(rules)
+
+
+class Option(NamedTuple):
+    """One on/off switch in ``.tide.yml``, as the config builder shows it."""
+    name: str
+    default: bool
+    help: str
+
+
+_HELP = {
+    "auto_label": "Label new issues by their content.",
+    "size_labels": "Add a size/XS to size/XL label to every PR.",
+    "star_gate": "Only people who starred the repo can run AI commands, stats and help.",
+    "triage_label": "Add a triage label to new issues until a maintainer looks.",
+    "pr_lint": "Check new PR titles and descriptions.",
+    "duplicate_check": "Look for duplicates among open issues when an issue opens.",
+}
+
+
+def options() -> List[Option]:
+    """Every on/off switch with its default, in the order of ``TideConfig``."""
+    defaults = asdict(TideConfig())
+    return [Option(f.name, defaults[f.name], _HELP[f.name])
+            for f in fields(TideConfig) if f.type == "bool"]
+
+
+def to_yaml(config: TideConfig) -> str:
+    """Write ``config`` as ``.tide.yml`` text that ``parse_config`` reads back."""
+    lines = [f"{o.name}: {'true' if getattr(config, o.name) else 'false'}" for o in options()]
+    if config.reviewers:
+        lines.append("reviewers:")
+        for pattern, owners in config.reviewers:
+            people = ", ".join(json.dumps(o) for o in owners)
+            lines.append(f"  {json.dumps(pattern)}: [{people}]")
+    return "\n".join(lines) + "\n"
 
 
 def parse_config(text: Optional[str]) -> TideConfig:
