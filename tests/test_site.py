@@ -116,3 +116,33 @@ def test_config_builder_shows_yaml_that_parses_to_the_defaults():
 def test_every_page_links_to_the_config_builder():
     for page in _pages():
         assert "config.html" in _parse(page).links, page
+
+
+def _node(script):
+    import shutil
+    import subprocess
+    import pytest
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("node is not installed")
+    run = subprocess.run([node, "-e", script], capture_output=True, text=True, check=True)
+    return run.stdout
+
+
+def test_config_builder_loads_its_script_and_reviewers_box():
+    page = _parse("config.html")
+    assert "config.js" in page.links and "reviewers" in page.ids
+
+
+def test_config_script_writes_the_same_yaml_as_the_bot():
+    import json
+    from tidebot.config import options, parse_config, to_yaml
+    switches = [{"name": o.name, "on": o.name != "pr_lint"} for o in options()]
+    reviewers = "docs/: alice, @@bob\n*.py: @org/backend\nno colon here\nsrc/:\n"
+    script = (f"const c = require({json.dumps(str(SITE / 'config.js'))});"
+              f"process.stdout.write(c.tideYaml({json.dumps(switches)}, {json.dumps(reviewers)}));")
+    text = _node(script)
+    cfg = parse_config(text)
+    assert cfg.pr_lint is False and cfg.star_gate is True
+    assert cfg.reviewers == (("docs/", ("@alice", "@bob")), ("*.py", ("@org/backend",)))
+    assert text == to_yaml(cfg)

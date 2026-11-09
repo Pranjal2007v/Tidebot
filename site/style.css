@@ -119,3 +119,6 @@ footer { border-top: 1px solid var(--border); padding: 24px 0 40px; color: var(-
 .output pre { margin: 0 0 12px; padding: 12px 16px; background: var(--code-bg); border-radius: 8px; overflow-x: auto; }
 .output pre code { background: none; padding: 0; }
 @media (max-width: 760px) { .builder { grid-template-columns: minmax(0, 1fr); } }
+.reviewers { display: block; margin: 16px 0 6px; }
+.reviewers span { display: block; color: var(--muted); font-size: 0.9rem; }
+#reviewers { width: 100%; box-sizing: border-box; font: 0.9rem ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--text); background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; }

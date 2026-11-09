@@ -153,6 +153,11 @@ def render_config() -> str:
             "        </label>",
         ]
     lines += [
+        '        <label class="reviewers" for="reviewers"><code>reviewers</code> '
+        "<span>Who reviews each code area, one per line: a CODEOWNERS pattern, a colon, "
+        "then logins or teams.</span></label>",
+        '        <textarea id="reviewers" rows="4" spellcheck="false" '
+        'placeholder="docs/: alice&#10;*.py: bob, @org/backend"></textarea>',
         "      </form>",
         '      <div class="output">',
         '        <pre><code id="yaml">'
@@ -167,6 +172,7 @@ def render_config() -> str:
         '<a href="https://github.com/Pranjal2007v/Tidebot#configuration">Configuration</a> '
         "for how the file is read.</div>",
         "  </footer>",
+        '  <script src="config.js"></script>',
         "</body>",
         "</html>",
         "",
