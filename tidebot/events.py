@@ -146,7 +146,8 @@ def report_duplicates(gh: GitHubClient, repo: str, issue: dict,
     if ai is None or not borderline:
         post(strong)
         return
-    ai.submit(lambda model: post(confirm_borderline(model, issue, others, strong, borderline)))
+    ai.submit(lambda model: post(confirm_borderline(model, issue, others, strong, borderline)),
+              repo)
 
 
 def content_labels(gh: GitHubClient, repo: str, issue: dict) -> List[str]:

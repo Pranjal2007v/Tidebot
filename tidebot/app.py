@@ -13,19 +13,22 @@ its own answer when the model is done.
 Run it with ``uvicorn tidebot.app:app`` and ``TIDEBOT_WEBHOOK_SECRET`` set.
 Set ``TIDEBOT_APP_ID`` and ``TIDEBOT_PRIVATE_KEY`` (the path to the App's
 ``.pem`` file) to let it reply, and the ``TIDEBOT_AI_*`` variables described
-in ``tidebot/ai.py`` to turn on AI commands.
+in ``tidebot/ai.py`` to turn on AI commands. Set ``TIDEBOT_STATS_TOKEN`` to
+serve per-repo numbers at ``/api/stats/<owner>/<repo>`` to callers that send it
+as a bearer token.
 """
 
 from __future__ import annotations
 
 import asyncio
+import hmac
 import json
 import os
 from contextlib import asynccontextmanager
 from functools import partial
 from typing import Callable, Optional
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, Header, HTTPException, Request
 
 from .ai import NOT_CONFIGURED, ai_from_env
 from .aicommands import AI_HANDLERS, make_job, usage_error
@@ -36,6 +39,7 @@ from .events import (claim_issue, issue_opened, pull_request_opened, pull_reques
                      pull_request_ready)
 from .github import AppAuth, GitHubClient, GitHubError
 from .help import help_text
+from .metrics import Metrics
 from .permissions import Tier, tier_for
 from .ratelimit import RateLimiter
 from .router import Action, route_comment
@@ -82,7 +86,8 @@ def _reply_for(gh: GitHubClient, target: Target, action: Action,
         usage = usage_error(action.command)
         if usage or ai is None:
             return usage or f"`/{name}`: {NOT_CONFIGURED}"
-        return waiting_note(name, ai.submit(make_job(gh, target, action.command)))
+        return waiting_note(name, ai.submit(make_job(gh, target, action.command),
+                                                  target.repo))
     try:
         if community.handles(name):
             return community.run(gh, target, action.command)
@@ -95,9 +100,13 @@ def create_app(secret: str, store: StateStore,
                permission_lookup: PermissionLookup = permission_from_association,
                github: Optional[ClientFactory] = None,
                reminder_interval: float = REMINDER_INTERVAL,
-               ai: Optional[AIQueue] = None) -> FastAPI:
+               ai: Optional[AIQueue] = None,
+               stats_token: Optional[str] = None) -> FastAPI:
     limiter = RateLimiter(store)
     community = Community(store)
+    metrics = Metrics(store)
+    if ai is not None and ai.on_wait is None:
+        ai.on_wait = metrics.record_wait
     # New issues may queue an AI check on borderline duplicates.
     event_handlers = {**_EVENT_HANDLERS,
                       ("issues", "opened"): ("issue", partial(issue_opened, ai=ai))}
@@ -131,6 +140,15 @@ def create_app(secret: str, store: StateStore,
     @app.get("/healthz")
     def healthz():
         return {"ok": True}
+
+    @app.get("/api/stats/{owner}/{name}")
+    def repo_stats(owner: str, name: str, authorization: Optional[str] = Header(None)):
+        # Off unless a token is set; the dashboard's GitHub sign-in comes later.
+        if not stats_token:
+            raise HTTPException(status_code=404, detail="stats are turned off")
+        if not hmac.compare_digest(authorization or "", f"Bearer {stats_token}"):
+            raise HTTPException(status_code=401, detail="bad token")
+        return metrics.report(f"{owner}/{name}")
 
     @app.post("/webhook")
     async def webhook(request: Request):
@@ -219,7 +237,8 @@ def _app_from_env() -> FastAPI:
     return create_app(os.environ.get("TIDEBOT_WEBHOOK_SECRET", ""),
                       StateStore(os.environ.get("TIDEBOT_STATE", DEFAULT_PATH)),
                       github=_github_from_env(),
-                      ai=AIQueue(model) if model else None)
+                      ai=AIQueue(model) if model else None,
+                      stats_token=os.environ.get("TIDEBOT_STATS_TOKEN"))
 
 
 app = _app_from_env()

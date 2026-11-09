@@ -11,17 +11,23 @@ from __future__ import annotations
 
 import queue
 import threading
-from typing import Callable, Optional
+import time
+from typing import Callable, Optional, Tuple
 
 from .ai import AIClient
 
 Job = Callable[[AIClient], None]
+# Called with the repo and the seconds a job waited before it started.
+WaitHook = Callable[[str, float], None]
 
 
 class AIQueue:
-    def __init__(self, client: AIClient):
+    def __init__(self, client: AIClient, on_wait: Optional[WaitHook] = None,
+                 clock: Callable[[], float] = time.monotonic):
         self.client = client
-        self._jobs: "queue.Queue[Job]" = queue.Queue()
+        self.on_wait = on_wait
+        self._clock = clock
+        self._jobs: "queue.Queue[Tuple[Job, str, float]]" = queue.Queue()
         self._lock = threading.Lock()
         self._pending = 0
         self._worker: Optional[threading.Thread] = None
@@ -32,8 +38,8 @@ class AIQueue:
         with self._lock:
             return self._pending
 
-    def submit(self, job: Job) -> int:
-        """Queue ``job`` and return how many jobs are ahead of it."""
+    def submit(self, job: Job, repo: str = "") -> int:
+        """Queue ``job`` for ``repo`` and return how many jobs are ahead of it."""
         with self._lock:
             ahead = self._pending
             self._pending += 1
@@ -41,7 +47,7 @@ class AIQueue:
                 self._worker = threading.Thread(target=self._run, name="tidebot-ai",
                                                 daemon=True)
                 self._worker.start()
-        self._jobs.put(job)
+        self._jobs.put((job, repo, self._clock()))
         return ahead
 
     def join(self) -> None:
@@ -50,7 +56,12 @@ class AIQueue:
 
     def _run(self) -> None:
         while True:
-            job = self._jobs.get()
+            job, repo, queued = self._jobs.get()
+            if self.on_wait is not None:
+                try:
+                    self.on_wait(repo, self._clock() - queued)
+                except Exception as err:  # a metrics problem must not drop the job
+                    print(f"tidebot: recording the queue wait failed: {err!r}")
             try:
                 job(self.client)
             except Exception as err:  # one bad job must not stop the queue
