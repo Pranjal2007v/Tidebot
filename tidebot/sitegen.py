@@ -1,7 +1,9 @@
-"""Generate the website's command reference from the command catalog.
+"""Generate the website's command reference and config builder.
 
-Run ``python -m tidebot.sitegen`` after changing a command, its tier or its
-catalog entry. A test fails when ``site/commands.html`` is out of date.
+The command reference comes from the command catalog and the config builder
+from the switches in ``tidebot/config.py``. Run ``python -m tidebot.sitegen``
+after changing a command, its tier, its catalog entry or a config option. A
+test fails when ``site/commands.html`` or ``site/config.html`` is out of date.
 """
 
 from __future__ import annotations
@@ -14,10 +16,12 @@ from typing import List
 
 from .catalog import Entry, entries, tiers
 from .commands import Command
+from .config import TideConfig, options, to_yaml
 from .permissions import required_tier
 
 SITE = Path(__file__).resolve().parent.parent / "site"
 OUTPUT = SITE / "commands.html"
+CONFIG_OUTPUT = SITE / "config.html"
 
 _CODE = re.compile(r"`([^`]+)`")
 _BOLD = re.compile(r"\*\*([^*]+)\*\*")
@@ -49,16 +53,16 @@ def _row(entry: Entry) -> List[str]:
     ]
 
 
-def render() -> str:
-    all_entries = entries()
-    lines = [
+def _head(title: str, description: str) -> List[str]:
+    """The top of a generated page, up to the start of ``<main>``."""
+    return [
         "<!doctype html>",
         '<html lang="en">',
         "<head>",
         '  <meta charset="utf-8">',
         '  <meta name="viewport" content="width=device-width, initial-scale=1">',
-        "  <title>Tidebot commands</title>",
-        '  <meta name="description" content="Every Tidebot command, who can run it and an example.">',
+        f"  <title>{html.escape(title)}</title>",
+        f'  <meta name="description" content="{html.escape(description)}">',
         '  <link rel="stylesheet" href="style.css">',
         "</head>",
         "<body>",
@@ -67,11 +71,19 @@ def render() -> str:
         '      <a class="brand" href="index.html">Tidebot</a>',
         "      <nav>",
         '        <a href="commands.html">Commands</a>',
+        '        <a href="config.html">Config</a>',
         '        <a href="https://github.com/Pranjal2007v/Tidebot">GitHub</a>',
         "      </nav>",
         "    </div>",
         "  </header>",
         "",
+    ]
+
+
+def render() -> str:
+    all_entries = entries()
+    lines = [
+        *_head("Tidebot commands", "Every Tidebot command, who can run it and an example."),
         '  <main class="wrap">',
         '    <div class="hero">',
         "      <h1>Commands</h1>",
@@ -116,9 +128,59 @@ def render() -> str:
     return "\n".join(lines)
 
 
+def render_config() -> str:
+    """The config builder: one switch per ``.tide.yml`` option and the YAML."""
+    lines = [
+        *_head("Tidebot config builder", "Pick Tidebot's options and copy the .tide.yml."),
+        '  <main class="wrap">',
+        '    <div class="hero">',
+        "      <h1>Config builder</h1>",
+        "      <p>Turn options on or off, then copy the result into <code>.tide.yml</code> "
+        "at the root of your repo. Every option starts at its default.</p>",
+        "    </div>",
+        '    <div class="builder">',
+        '      <form id="options" onsubmit="return false">',
+    ]
+    for option in options():
+        checked = " checked" if option.default else ""
+        default = "true" if option.default else "false"
+        lines += [
+            '        <label class="option">',
+            f'          <input type="checkbox" id="{option.name}" name="{option.name}" '
+            f'data-default="{default}"{checked}>',
+            f"          <code>{option.name}</code>",
+            f"          <span>{inline(option.help)}</span>",
+            "        </label>",
+        ]
+    lines += [
+        "      </form>",
+        '      <div class="output">',
+        '        <pre><code id="yaml">'
+        + html.escape(to_yaml(TideConfig()), quote=False) + "</code></pre>",
+        '        <button type="button" class="button" id="copy">Copy .tide.yml</button>',
+        "      </div>",
+        "    </div>",
+        "  </main>",
+        "",
+        "  <footer>",
+        '    <div class="wrap">Generated from the options in the Tidebot source. See '
+        '<a href="https://github.com/Pranjal2007v/Tidebot#configuration">Configuration</a> '
+        "for how the file is read.</div>",
+        "  </footer>",
+        "</body>",
+        "</html>",
+        "",
+    ]
+    return "\n".join(lines)
+
+
+PAGES = {OUTPUT: render, CONFIG_OUTPUT: render_config}
+
+
 def main(argv: List[str]) -> int:
-    OUTPUT.write_text(render(), encoding="utf-8")
-    print(f"wrote {OUTPUT}")
+    for path, build in PAGES.items():
+        path.write_text(build(), encoding="utf-8")
+        print(f"wrote {path}")
     return 0
 
 

@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Tidebot config builder</title>
+  <meta name="description" content="Pick Tidebot&#x27;s options and copy the .tide.yml.">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="top">
+    <div class="wrap">
+      <a class="brand" href="index.html">Tidebot</a>
+      <nav>
+        <a href="commands.html">Commands</a>
+        <a href="config.html">Config</a>
+        <a href="https://github.com/Pranjal2007v/Tidebot">GitHub</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <div class="hero">
+      <h1>Config builder</h1>
+      <p>Turn options on or off, then copy the result into <code>.tide.yml</code> at the root of your repo. Every option starts at its default.</p>
+    </div>
+    <div class="builder">
+      <form id="options" onsubmit="return false">
+        <label class="option">
+          <input type="checkbox" id="auto_label" name="auto_label" data-default="true" checked>
+          <code>auto_label</code>
+          <span>Label new issues by their content.</span>
+        </label>
+        <label class="option">
+          <input type="checkbox" id="size_labels" name="size_labels" data-default="true" checked>
+          <code>size_labels</code>
+          <span>Add a size/XS to size/XL label to every PR.</span>
+        </label>
+        <label class="option">
+          <input type="checkbox" id="star_gate" name="star_gate" data-default="false">
+          <code>star_gate</code>
+          <span>Only people who starred the repo can run AI commands, stats and help.</span>
+        </label>
+        <label class="option">
+          <input type="checkbox" id="triage_label" name="triage_label" data-default="true" checked>
+          <code>triage_label</code>
+          <span>Add a triage label to new issues until a maintainer looks.</span>
+        </label>
+        <label class="option">
+          <input type="checkbox" id="pr_lint" name="pr_lint" data-default="true" checked>
+          <code>pr_lint</code>
+          <span>Check new PR titles and descriptions.</span>
+        </label>
+        <label class="option">
+          <input type="checkbox" id="duplicate_check" name="duplicate_check" data-default="true" checked>
+          <code>duplicate_check</code>
+          <span>Look for duplicates among open issues when an issue opens.</span>
+        </label>
+      </form>
+      <div class="output">
+        <pre><code id="yaml">auto_label: true
+size_labels: true
+star_gate: false
+triage_label: true
+pr_lint: true
+duplicate_check: true
+</code></pre>
+        <button type="button" class="button" id="copy">Copy .tide.yml</button>
+      </div>
+    </div>
+  </main>
+
+  <footer>
+    <div class="wrap">Generated from the options in the Tidebot source. See <a href="https://github.com/Pranjal2007v/Tidebot#configuration">Configuration</a> for how the file is read.</div>
+  </footer>
+</body>
+</html>

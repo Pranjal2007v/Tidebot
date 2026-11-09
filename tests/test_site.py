@@ -85,3 +85,34 @@ def test_tier_levels_match_who_can_run_each_command():
     assert levels["ask"] == "0" and levels["help"] == "0"
     assert levels["lgtm"] == "1" and levels["assign"] == "1"
     assert levels["merge"] == "2" and levels["label"] == "2"
+
+
+def test_config_builder_is_up_to_date():
+    from tidebot.sitegen import CONFIG_OUTPUT, render_config
+    assert CONFIG_OUTPUT.read_text(encoding="utf-8") == render_config(), \
+        "site/config.html is stale; run python -m tidebot.sitegen"
+
+
+def test_config_builder_has_a_switch_per_option_at_its_default():
+    import re
+    from tidebot.config import options
+    text = (SITE / "config.html").read_text(encoding="utf-8")
+    page = _parse("config.html")
+    assert {"options", "yaml", "copy"} <= page.ids
+    for option in options():
+        tag = re.search(rf'<input type="checkbox" id="{option.name}"[^>]*>', text).group(0)
+        assert ("checked" in tag) is option.default, option.name
+
+
+def test_config_builder_shows_yaml_that_parses_to_the_defaults():
+    import html
+    import re
+    from tidebot.config import TideConfig, parse_config
+    text = (SITE / "config.html").read_text(encoding="utf-8")
+    yaml_text = html.unescape(re.search(r'<code id="yaml">(.*?)</code>', text, re.S).group(1))
+    assert parse_config(yaml_text) == TideConfig()
+
+
+def test_every_page_links_to_the_config_builder():
+    for page in _pages():
+        assert "config.html" in _parse(page).links, page
