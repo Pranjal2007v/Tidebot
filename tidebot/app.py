@@ -14,8 +14,11 @@ Run it with ``uvicorn tidebot.app:app`` and ``TIDEBOT_WEBHOOK_SECRET`` set.
 Set ``TIDEBOT_APP_ID`` and ``TIDEBOT_PRIVATE_KEY`` (the path to the App's
 ``.pem`` file) to let it reply, and the ``TIDEBOT_AI_*`` variables described
 in ``tidebot/ai.py`` to turn on AI commands. Set ``TIDEBOT_STATS_TOKEN`` to
-serve per-repo numbers at ``/api/stats/<owner>/<repo>`` to callers that send it
-as a bearer token.
+serve per-repo numbers at ``/api/stats/<owner>/<repo>`` (and the list of repos
+at ``/api/stats``) to callers that send it as a bearer token, and
+``TIDEBOT_DASHBOARD_ORIGINS`` (comma-separated, such as
+``https://tidebot.example.com``) to let the dashboard page on those sites
+read them.
 """
 
 from __future__ import annotations
@@ -26,9 +29,10 @@ import json
 import os
 from contextlib import asynccontextmanager
 from functools import partial
-from typing import Callable, Optional
+from typing import Callable, List, Optional, Sequence
 
 from fastapi import FastAPI, Header, HTTPException, Request
+from fastapi.middleware.cors import CORSMiddleware
 
 from .ai import NOT_CONFIGURED, ai_from_env
 from .aicommands import AI_HANDLERS, make_job, usage_error
@@ -102,7 +106,8 @@ def create_app(secret: str, store: StateStore,
                github: Optional[ClientFactory] = None,
                reminder_interval: float = REMINDER_INTERVAL,
                ai: Optional[AIQueue] = None,
-               stats_token: Optional[str] = None) -> FastAPI:
+               stats_token: Optional[str] = None,
+               dashboard_origins: Sequence[str] = ()) -> FastAPI:
     limiter = RateLimiter(store)
     community = Community(store)
     metrics = Metrics(store)
@@ -137,18 +142,30 @@ def create_app(secret: str, store: StateStore,
             task.cancel()
 
     app = FastAPI(title="Tidebot", lifespan=lifespan)
+    if dashboard_origins:
+        # The dashboard is a static page on another site, so the browser asks first.
+        app.add_middleware(CORSMiddleware, allow_origins=list(dashboard_origins),
+                           allow_methods=["GET"], allow_headers=["Authorization"])
 
-    @app.get("/healthz")
-    def healthz():
-        return {"ok": True}
-
-    @app.get("/api/stats/{owner}/{name}")
-    def repo_stats(owner: str, name: str, authorization: Optional[str] = Header(None)):
+    def check_stats_token(authorization: Optional[str]) -> None:
         # Off unless a token is set; the dashboard's GitHub sign-in comes later.
         if not stats_token:
             raise HTTPException(status_code=404, detail="stats are turned off")
         if not hmac.compare_digest(authorization or "", f"Bearer {stats_token}"):
             raise HTTPException(status_code=401, detail="bad token")
+
+    @app.get("/healthz")
+    def healthz():
+        return {"ok": True}
+
+    @app.get("/api/stats")
+    def stats_repos(authorization: Optional[str] = Header(None)):
+        check_stats_token(authorization)
+        return {"repos": metrics.repos()}
+
+    @app.get("/api/stats/{owner}/{name}")
+    def repo_stats(owner: str, name: str, authorization: Optional[str] = Header(None)):
+        check_stats_token(authorization)
         return metrics.report(f"{owner}/{name}")
 
     @app.post("/webhook")
@@ -234,13 +251,19 @@ def _github_from_env() -> Optional[ClientFactory]:
     return lambda installation: GitHubClient(lambda: auth.installation_token(installation))
 
 
+def _origins(text: str) -> List[str]:
+    """``https://a.example, https://b.example`` as a list, trailing slashes dropped."""
+    return [o.strip().rstrip("/") for o in text.split(",") if o.strip()]
+
+
 def _app_from_env() -> FastAPI:
     model = ai_from_env()
     return create_app(os.environ.get("TIDEBOT_WEBHOOK_SECRET", ""),
                       StateStore(os.environ.get("TIDEBOT_STATE", DEFAULT_PATH)),
                       github=_github_from_env(),
                       ai=AIQueue(model) if model else None,
-                      stats_token=os.environ.get("TIDEBOT_STATS_TOKEN"))
+                      stats_token=os.environ.get("TIDEBOT_STATS_TOKEN"),
+                      dashboard_origins=_origins(os.environ.get("TIDEBOT_DASHBOARD_ORIGINS", "")))
 
 
 app = _app_from_env()

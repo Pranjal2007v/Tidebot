@@ -335,3 +335,28 @@ The spec is [README.md](README.md). Work follows its [Roadmap](README.md#roadmap
 | B | ishitasharma2490 | ishitasharma2490@gmail.com | `a2fb3ac4f1fe6c75cbab459767645ead49128390` | feat: generate a config builder page with a switch per .tide.yml option |
 | C | bitflicker64 | himnshuverma10152006@gmail.com | `25185af6b17769f7060704c8b6141c865bfed7a8` | feat: update the config builder YAML live and add a copy button |
 | D | Payal-Phougat | 226825128+Payal-Phougat@users.noreply.github.com | `99286a65c6763923fc93dea2a675b26f1e6556d7` | feat: track AI queue waits and serve per-repo stats as JSON |
+
+## Run 14 (2026-11-10)
+
+**Estimated complete:** 70%
+
+**Added**
+
+- Reviews posted in `tidebot/metrics.py`: when a `/review`, `/review-sc`, `/security`, `/perf` or `/docs` answer goes out on a PR, the queue job tells `Metrics.record_reply` (failures and replies on issues aren't counted). The stats report gains `reviews` with a total and a count per command.
+- Duplicates caught: `issue_opened` and `report_duplicates` take an `on_duplicates` hook that fires once a duplicates comment is posted, including after the AI check on borderline matches. The report gains `duplicates_caught`.
+- `site/dashboard.html` and `site/dashboard.js`, the first [Dashboard](README.md#website) page: enter the server, the repo and the stats token, and it shows four cards (commands run, median queue wait, reviews posted, duplicates caught). It remembers the server and repo in the browser, never the token, and says why when the server refuses the token, has stats off or can't be reached. Every page now links to it.
+- `GET /api/stats` lists every repo the bot has numbers for, behind the same token, and the dashboard offers them in the repo box. `TIDEBOT_DASHBOARD_ORIGINS` (comma-separated) lets the dashboard page on those sites call the stats API from the browser; without it no cross-origin headers are sent.
+
+**Next 5%**
+
+- GitHub sign-in for the dashboard (OAuth web flow on the bot), so a maintainer sees only the repos they can push to, replacing the shared token.
+- Then the [Roadmap](README.md#roadmap)'s Website and Dashboard items can be ticked, and work moves to the hosted option.
+
+**Blockers:** none. The dashboard hasn't been opened in a browser against a running bot yet; its card text and URLs are covered by a `node` test and the CORS headers by FastAPI tests. Still not run against a live GitHub App or a real model endpoint.
+
+| Commit | GitHub | Email | SHA | Message |
+|---|---|---|---|---|
+| A | ishitasharma2490 | ishitasharma2490@gmail.com | `b8f09dbb061d8f7fc131b8744b5575d38ad1a0b2` | feat: count reviews posted per repo for the dashboard |
+| B | bitflicker64 | himnshuverma10152006@gmail.com | `01c81817caa5509d31760e20789cc0980598f911` | feat: count issues that got a duplicates comment in the stats report |
+| C | Payal-Phougat | 226825128+Payal-Phougat@users.noreply.github.com | `2c0c2b1411cd07782a6a942c69fe297b11b55196` | feat: add a dashboard page that shows a repo's four numbers |
+| D | Pranjal2007v | pranjalgangwar910@gmail.com | *(this commit, filled in next run)* | feat: list repos for the dashboard and let its origin read the stats |

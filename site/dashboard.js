@@ -42,8 +42,10 @@
     return "The server answered " + status + ".";
   }
 
+  // The report for one repo, or the list of repos when repo is left out.
   function statsUrl(server, repo) {
-    return server.replace(/\/+$/, "") + "/api/stats/" + repo.split("/").map(encodeURIComponent).join("/");
+    var base = server.replace(/\/+$/, "") + "/api/stats";
+    return repo ? base + "/" + repo.split("/").map(encodeURIComponent).join("/") : base;
   }
 
   if (typeof module !== "undefined" && module.exports) {
@@ -54,6 +56,7 @@
   var form = document.getElementById("lookup");
   var status = document.getElementById("status");
   var numbers = document.getElementById("numbers");
+  var known = document.getElementById("repos");
   if (!form) return;
 
   // Remember the server and repo, never the token.
@@ -81,6 +84,21 @@
     numbers.hidden = false;
   }
 
+  // Offer the server's repos in the repo box; a failure here changes nothing.
+  function listRepos(server, headers) {
+    fetch(statsUrl(server), { headers: headers })
+      .then(function (res) { return res.ok ? res.json() : { repos: [] }; })
+      .then(function (data) {
+        known.textContent = "";
+        (data.repos || []).forEach(function (name) {
+          var option = document.createElement("option");
+          option.value = name;
+          known.append(option);
+        });
+      })
+      .catch(function () {});
+  }
+
   form.addEventListener("submit", function (event) {
     event.preventDefault();
     var server = form.server.value.trim();
@@ -90,7 +108,8 @@
     } catch (e) { /* storage is optional */ }
     status.textContent = "Loading " + repo + "...";
     numbers.hidden = true;
-    fetch(statsUrl(server, repo), { headers: { Authorization: "Bearer " + form.token.value } })
+    var headers = { Authorization: "Bearer " + form.token.value };
+    fetch(statsUrl(server, repo), { headers: headers })
       .then(function (res) {
         if (!res.ok) throw new Error(problem(res.status));
         return res.json();
@@ -98,6 +117,7 @@
       .then(function (report) {
         status.textContent = "Numbers for " + report.repo + ".";
         show(report);
+        listRepos(server, headers);
       })
       .catch(function (err) {
         // fetch rejects with a TypeError when the request never gets an answer.

@@ -104,3 +104,46 @@ def test_duplicates_caught_are_counted():
     m.record_duplicates("o/r", 9)
     m.record_duplicates("", 1)
     assert m.report("o/r")["duplicates_caught"] == 2
+
+
+def test_repos_lists_every_repo_with_numbers():
+    store = StateStore(None)
+    store.set("stats", {"o/r": {"ping": 1}, "x/y": {"help": 1}})
+    Metrics(store).record_wait("a/b", 1.0)
+    assert Metrics(store).repos() == ["a/b", "o/r", "x/y"]
+
+
+def test_stats_list_endpoint_needs_the_token():
+    store = StateStore(None)
+    store.set("stats", {"o/r": {"ping": 2}})
+    c = TestClient(create_app("s", store, stats_token="t0ken"))
+    assert c.get("/api/stats").status_code == 401
+    res = c.get("/api/stats", headers={"Authorization": "Bearer t0ken"})
+    assert res.json() == {"repos": ["o/r"]}
+    assert TestClient(create_app("s", store)).get("/api/stats").status_code == 404
+
+
+def test_dashboard_origins_may_read_the_stats():
+    store = StateStore(None)
+    app = create_app("s", store, stats_token="t0ken",
+                     dashboard_origins=["https://tide.example"])
+    c = TestClient(app)
+    pre = c.options("/api/stats/o/r", headers={
+        "Origin": "https://tide.example", "Access-Control-Request-Method": "GET",
+        "Access-Control-Request-Headers": "authorization"})
+    assert pre.status_code == 200
+    assert pre.headers["access-control-allow-origin"] == "https://tide.example"
+    res = c.get("/api/stats/o/r", headers={"Origin": "https://evil.example",
+                                           "Authorization": "Bearer t0ken"})
+    assert "access-control-allow-origin" not in res.headers
+    plain = TestClient(create_app("s", store, stats_token="t0ken"))
+    res = plain.get("/api/stats/o/r", headers={"Origin": "https://tide.example",
+                                               "Authorization": "Bearer t0ken"})
+    assert "access-control-allow-origin" not in res.headers
+
+
+def test_dashboard_origins_come_from_a_comma_list():
+    from tidebot.app import _origins
+    assert _origins(" https://a.example/, ,https://b.example ") == [
+        "https://a.example", "https://b.example"]
+    assert _origins("") == []

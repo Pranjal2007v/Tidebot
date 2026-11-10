@@ -156,7 +156,7 @@ def test_every_page_links_to_the_dashboard():
 def test_dashboard_has_its_form_and_script():
     page = _parse("dashboard.html")
     assert "dashboard.js" in page.links
-    assert {"lookup", "server", "repo", "token", "status", "numbers"} <= page.ids
+    assert {"lookup", "server", "repo", "repos", "token", "status", "numbers"} <= page.ids
 
 
 def test_dashboard_script_turns_a_stats_report_into_four_cards():
@@ -173,6 +173,7 @@ def test_dashboard_script_turns_a_stats_report_into_four_cards():
     script = (f"const d = require({json.dumps(str(SITE / 'dashboard.js'))});"
               f"process.stdout.write(JSON.stringify({{cards: d.cards({json.dumps(m.report('o/r'))}),"
               "empty: d.cards({repo: 'o/r'}), url: d.statsUrl('https://bot.test/', 'o/r'),"
+              "list: d.statsUrl('https://bot.test'),"
               "problems: [401, 404, 500].map(d.problem)}));")
     out = json.loads(_node(script))
     assert [c["label"] for c in out["cards"]] == [
@@ -182,4 +183,5 @@ def test_dashboard_script_turns_a_stats_report_into_four_cards():
     assert out["cards"][1]["detail"] == "3 AI jobs, longest 1m 35s"
     assert [c["value"] for c in out["empty"]] == ["0", "none yet", "0", "0"]
     assert out["url"] == "https://bot.test/api/stats/o/r"
+    assert out["list"] == "https://bot.test/api/stats"
     assert "token" in out["problems"][0] and "turned off" in out["problems"][1]

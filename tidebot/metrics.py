@@ -9,7 +9,7 @@ them together with the command counts ``/stats`` already keeps.
 from __future__ import annotations
 
 import statistics
-from typing import Any, Dict
+from typing import Any, Dict, List
 
 from .community import STATS_KEY
 from .state import StateStore
@@ -65,6 +65,11 @@ class Metrics:
             entry["duplicates"] = entry.get("duplicates", 0) + 1
 
         self._update(repo, change)
+
+    def repos(self) -> List[str]:
+        """Every repo the bot has numbers for, sorted."""
+        names = set(self.store.get(STATS_KEY) or {}) | set(self.store.get(METRICS_KEY) or {})
+        return sorted(name for name in names if name)
 
     def report(self, repo: str) -> Dict[str, Any]:
         counts = (self.store.get(STATS_KEY) or {}).get(repo, {})

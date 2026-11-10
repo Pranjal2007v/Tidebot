@@ -31,13 +31,16 @@
       <label for="server">Server</label>
       <input id="server" name="server" type="url" placeholder="https://tidebot.example.com" required>
       <label for="repo">Repo</label>
-      <input id="repo" name="repo" type="text" placeholder="owner/name" pattern="[^/\s]+/[^/\s]+" required>
+      <input id="repo" name="repo" type="text" placeholder="owner/name" pattern="[^/\s]+/[^/\s]+" list="repos" required>
+      <datalist id="repos"></datalist>
       <label for="token">Token</label>
       <input id="token" name="token" type="password" autocomplete="off" required>
       <button class="button" type="submit">Show</button>
     </form>
     <p class="note">The token is the server's <code>TIDEBOT_STATS_TOKEN</code>. It stays in this
-      tab and is sent only to the server above.</p>
+      tab and is sent only to the server above. Once it is accepted, the repo box offers every
+      repo the server has numbers for. The server must list this site in
+      <code>TIDEBOT_DASHBOARD_ORIGINS</code>.</p>
 
     <p id="status" role="status"></p>
     <section id="numbers" class="features" hidden></section>
