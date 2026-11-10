@@ -295,3 +295,14 @@ def test_clear_duplicates_skip_the_queue():
     issue_opened(gh, "o/r", {"number": 4, "title": "Reminder posted twice after a restart"},
                  TideConfig(triage_label=False, auto_label=False), ai=Queue())
     assert "#2 Reminders posted twice" in gh.calls[1][3]
+
+
+def test_duplicates_hook_hears_only_issues_that_got_a_comment():
+    heard = []
+    gh = FakeGitHub(issues=[{"number": 2, "title": "Reminders posted twice after restart"}])
+    config = TideConfig(triage_label=False, auto_label=False)
+    issue_opened(gh, "o/r", {"number": 4, "title": "Reminder posted twice after a restart"},
+                 config, on_duplicates=lambda *a: heard.append(a))
+    issue_opened(gh, "o/r", {"number": 5, "title": "Add a dark theme"},
+                 config, on_duplicates=lambda *a: heard.append(a))
+    assert heard == [("o/r", 4)]

@@ -56,6 +56,16 @@ class Metrics:
 
         self._update(repo, change)
 
+    def record_duplicates(self, repo: str, number: int) -> None:
+        """Note that issue ``number`` got a duplicates comment."""
+        if not repo:
+            return
+
+        def change(entry):
+            entry["duplicates"] = entry.get("duplicates", 0) + 1
+
+        self._update(repo, change)
+
     def report(self, repo: str) -> Dict[str, Any]:
         counts = (self.store.get(STATS_KEY) or {}).get(repo, {})
         entry = (self.store.get(METRICS_KEY) or {}).get(repo, {})
@@ -77,4 +87,5 @@ class Metrics:
                 "by_command": {name: reviews[name] for name in REVIEW_COMMANDS
                                if reviews.get(name)},
             },
+            "duplicates_caught": entry.get("duplicates", 0),
         }

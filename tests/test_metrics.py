@@ -95,3 +95,12 @@ def test_reviews_posted_are_counted_per_command():
                                  "by_command": {"review": 2, "review-sc": 1, "security": 1}}
     assert report["queue"]["jobs"] == 1
     assert Metrics(StateStore(None)).report("o/r")["reviews"] == {"total": 0, "by_command": {}}
+
+
+def test_duplicates_caught_are_counted():
+    m = Metrics(StateStore(None))
+    assert m.report("o/r")["duplicates_caught"] == 0
+    m.record_duplicates("o/r", 4)
+    m.record_duplicates("o/r", 9)
+    m.record_duplicates("", 1)
+    assert m.report("o/r")["duplicates_caught"] == 2

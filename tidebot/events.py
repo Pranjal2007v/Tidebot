@@ -8,7 +8,7 @@ tiers. See the README's Automatic behavior section for what each one does.
 from __future__ import annotations
 
 import re
-from typing import List, Optional
+from typing import Callable, List, Optional
 
 from .aiqueue import AIQueue
 from .config import TideConfig
@@ -22,6 +22,8 @@ from .router import is_bot
 from .size import changed_lines, size_label, stale_labels
 
 TRIAGE_LABEL = "triage"
+# Called with the repo and issue number when a duplicates comment goes out.
+DuplicatesHook = Callable[[str, int], None]
 # Ways people ask for an issue: "I'd like to work on this", "can I take
 # this?", "please assign this to me".
 _CLAIM = re.compile(
@@ -110,7 +112,8 @@ def label_size(gh: GitHubClient, repo: str, pr: dict) -> None:
 
 
 def issue_opened(gh: GitHubClient, repo: str, issue: dict, config: TideConfig,
-                 ai: Optional[AIQueue] = None) -> None:
+                 ai: Optional[AIQueue] = None,
+                 on_duplicates: Optional[DuplicatesHook] = None) -> None:
     """Label a new issue by content, mark it for triage and look for duplicates."""
     labels: List[str] = []
     if config.triage_label:
@@ -120,12 +123,16 @@ def issue_opened(gh: GitHubClient, repo: str, issue: dict, config: TideConfig,
     if labels:
         gh.add_labels(repo, issue["number"], labels)
     if config.duplicate_check:
-        report_duplicates(gh, repo, issue, ai)
+        report_duplicates(gh, repo, issue, ai, on_duplicates)
 
 
 def report_duplicates(gh: GitHubClient, repo: str, issue: dict,
-                      ai: Optional[AIQueue] = None) -> None:
+                      ai: Optional[AIQueue] = None,
+                      on_duplicates: Optional[DuplicatesHook] = None) -> None:
     """Reply with open issues that look like the same report; never close anything.
+
+    ``on_duplicates`` is told the repo and issue number once a duplicates
+    comment is posted, so the dashboard can count duplicates caught.
 
     With a model configured, borderline matches are checked on the AI queue
     and the one reply is posted from there, so the webhook isn't held up.
@@ -142,6 +149,8 @@ def report_duplicates(gh: GitHubClient, repo: str, issue: dict,
         reply = duplicates_comment(matches)
         if reply:
             gh.post_comment(repo, issue["number"], reply)
+            if on_duplicates is not None:
+                on_duplicates(repo, issue["number"])
 
     if ai is None or not borderline:
         post(strong)

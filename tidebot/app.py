@@ -109,8 +109,8 @@ def create_app(secret: str, store: StateStore,
     if ai is not None and ai.on_wait is None:
         ai.on_wait = metrics.record_wait
     # New issues may queue an AI check on borderline duplicates.
-    event_handlers = {**_EVENT_HANDLERS,
-                      ("issues", "opened"): ("issue", partial(issue_opened, ai=ai))}
+    opened = partial(issue_opened, ai=ai, on_duplicates=metrics.record_duplicates)
+    event_handlers = {**_EVENT_HANDLERS, ("issues", "opened"): ("issue", opened)}
 
     def deliver_reminders() -> None:
         try:
