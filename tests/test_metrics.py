@@ -82,3 +82,16 @@ def test_app_records_waits_from_its_ai_queue():
     q.submit(lambda model: None, "o/r")
     q.join()
     assert Metrics(store).report("o/r")["queue"]["jobs"] == 1
+
+
+def test_reviews_posted_are_counted_per_command():
+    m = Metrics(StateStore(None))
+    for command in ("review", "review-sc", "review", "security", "ask", "chat"):
+        m.record_reply("o/r", command)
+    m.record_reply("", "review")
+    m.record_wait("o/r", 1.0)
+    report = m.report("o/r")
+    assert report["reviews"] == {"total": 4,
+                                 "by_command": {"review": 2, "review-sc": 1, "security": 1}}
+    assert report["queue"]["jobs"] == 1
+    assert Metrics(StateStore(None)).report("o/r")["reviews"] == {"total": 0, "by_command": {}}

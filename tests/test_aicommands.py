@@ -476,3 +476,13 @@ def test_chat_sends_earlier_turns_without_repeating_the_question():
 def test_chat_needs_a_message():
     assert usage_error(Command("chat")) == "Usage: `:tide /chat how should I test this?`"
     assert usage_error(Command("chat", "hi")) is None
+
+
+def test_reply_hook_hears_answers_posted_on_a_pr_only():
+    heard = []
+    pr = Target("o/r", 5, True, "alice", 99)
+    make_job(FakeGitHub(), pr, Command("ask", "why?"), lambda *a: heard.append(a))(FakeAI())
+    make_job(FakeGitHub(), TARGET, Command("ask", "why?"), lambda *a: heard.append(a))(FakeAI())
+    failing = FakeAI(error=AIError("the model took too long to answer"))
+    make_job(FakeGitHub(), pr, Command("ask", "why?"), lambda *a: heard.append(a))(failing)
+    assert heard == [("o/r", "ask")]

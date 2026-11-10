@@ -420,20 +420,33 @@ def usage_error(command: Command) -> Optional[str]:
     return None
 
 
-def make_job(gh: GitHubClient, target: Target, command: Command) -> Job:
-    """A queue job that runs ``command`` and posts the answer on the issue."""
+# Called with the repo and command name once a command's answer is posted.
+ReplyHook = Callable[[str, str], None]
+
+
+def make_job(gh: GitHubClient, target: Target, command: Command,
+             on_reply: Optional[ReplyHook] = None) -> Job:
+    """A queue job that runs ``command`` and posts the answer on the issue.
+
+    ``on_reply`` hears about answers that went out on a PR, not failures,
+    so the dashboard can count reviews posted.
+    """
     handler = AI_HANDLERS[command.name]
 
     def job(ai: AIClient) -> None:
         try:
             answer = handler.run(gh, ai, target, command.args)
-            if answer is None:
-                return
-            reply = f"`/{command.name}` for @{target.author}:\n\n{clip(answer, MAX_REPLY)}"
-        except AIError as err:
-            reply = f"`/{command.name}` failed: {err}"
-        except GitHubError as err:
-            reply = f"`/{command.name}` failed: GitHub answered {err.status}"
-        gh.post_comment(target.repo, target.number, reply)
+        except (AIError, GitHubError) as err:
+            reason = (f"GitHub answered {err.status}" if isinstance(err, GitHubError)
+                      else str(err))
+            gh.post_comment(target.repo, target.number, f"`/{command.name}` failed: {reason}")
+            return
+        # None means the command posted its answer itself.
+        if answer is not None:
+            gh.post_comment(target.repo, target.number,
+                            f"`/{command.name}` for @{target.author}:\n\n"
+                            f"{clip(answer, MAX_REPLY)}")
+        if on_reply is not None and target.is_pr:
+            on_reply(target.repo, command.name)
 
     return job

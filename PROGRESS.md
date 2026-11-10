@@ -334,4 +334,4 @@ The spec is [README.md](README.md). Work follows its [Roadmap](README.md#roadmap
 | A | Pranjal2007v | pranjalgangwar910@gmail.com | `2087e93159a5dc3939f9c18c183026653d2705f6` | feat: describe each .tide.yml switch and write a config back as YAML |
 | B | ishitasharma2490 | ishitasharma2490@gmail.com | `a2fb3ac4f1fe6c75cbab459767645ead49128390` | feat: generate a config builder page with a switch per .tide.yml option |
 | C | bitflicker64 | himnshuverma10152006@gmail.com | `25185af6b17769f7060704c8b6141c865bfed7a8` | feat: update the config builder YAML live and add a copy button |
-| D | Payal-Phougat | 226825128+Payal-Phougat@users.noreply.github.com | *(this commit, filled in next run)* | feat: track AI queue waits and serve per-repo stats as JSON |
+| D | Payal-Phougat | 226825128+Payal-Phougat@users.noreply.github.com | `99286a65c6763923fc93dea2a675b26f1e6556d7` | feat: track AI queue waits and serve per-repo stats as JSON |

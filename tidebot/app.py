@@ -76,7 +76,7 @@ def permission_from_association(repo: str, comment: dict) -> Optional[str]:
 
 def _reply_for(gh: GitHubClient, target: Target, action: Action,
                permission: Optional[str], community: Community,
-               ai: Optional[AIQueue]) -> Optional[str]:
+               ai: Optional[AIQueue], metrics: Metrics) -> Optional[str]:
     name = action.command.name
     if not action.allowed:
         return f"`/{name}`: {action.reason}"
@@ -86,7 +86,8 @@ def _reply_for(gh: GitHubClient, target: Target, action: Action,
         usage = usage_error(action.command)
         if usage or ai is None:
             return usage or f"`/{name}`: {NOT_CONFIGURED}"
-        return waiting_note(name, ai.submit(make_job(gh, target, action.command),
+        return waiting_note(name, ai.submit(make_job(gh, target, action.command,
+                                                   metrics.record_reply),
                                                   target.repo))
     try:
         if community.handles(name):
@@ -205,7 +206,8 @@ def create_app(secret: str, store: StateStore,
         if gh is not None and "number" in issue:
             target = Target(repo, issue["number"], "pull_request" in issue, author,
                             installation)
-            replies = [r for r in (_reply_for(gh, target, a, permission, community, ai)
+            replies = [r for r in (_reply_for(gh, target, a, permission, community, ai,
+                                                  metrics)
                                        for a in actions) if r]
             claimed = claim_issue(gh, repo, issue, author, comment.get("body"))
             if claimed:
