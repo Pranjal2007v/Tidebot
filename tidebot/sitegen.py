@@ -72,6 +72,7 @@ def _head(title: str, description: str) -> List[str]:
         "      <nav>",
         '        <a href="commands.html">Commands</a>',
         '        <a href="config.html">Config</a>',
+        '        <a href="dashboard.html">Dashboard</a>',
         '        <a href="https://github.com/Pranjal2007v/Tidebot">GitHub</a>',
         "      </nav>",
         "    </div>",

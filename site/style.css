@@ -122,3 +122,7 @@ footer { border-top: 1px solid var(--border); padding: 24px 0 40px; color: var(-
 .reviewers { display: block; margin: 16px 0 6px; }
 .reviewers span { display: block; color: var(--muted); font-size: 0.9rem; }
 #reviewers { width: 100%; box-sizing: border-box; font: 0.9rem ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--text); background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; }
+
+.feature .stat { font-size: 2rem; font-weight: 700; color: var(--text); margin: 0 0 4px; }
+.note { color: var(--muted); font-size: 0.9rem; }
+#status { color: var(--muted); }

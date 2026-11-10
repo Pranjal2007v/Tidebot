@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Tidebot dashboard</title>
+  <meta name="description" content="Commands run, queue wait times, reviews posted and duplicates caught for a repo that runs Tidebot.">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="top">
+    <div class="wrap">
+      <a class="brand" href="index.html">Tidebot</a>
+      <nav>
+        <a href="commands.html">Commands</a>
+        <a href="config.html">Config</a>
+        <a href="dashboard.html">Dashboard</a>
+        <a href="https://github.com/Pranjal2007v/Tidebot">GitHub</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <div class="hero">
+      <h1>Dashboard</h1>
+      <p>Commands run, queue wait times, reviews posted and duplicates caught for one repo,
+        read from your Tidebot server's stats endpoint.</p>
+    </div>
+
+    <form id="lookup" class="filters">
+      <label for="server">Server</label>
+      <input id="server" name="server" type="url" placeholder="https://tidebot.example.com" required>
+      <label for="repo">Repo</label>
+      <input id="repo" name="repo" type="text" placeholder="owner/name" pattern="[^/\s]+/[^/\s]+" required>
+      <label for="token">Token</label>
+      <input id="token" name="token" type="password" autocomplete="off" required>
+      <button class="button" type="submit">Show</button>
+    </form>
+    <p class="note">The token is the server's <code>TIDEBOT_STATS_TOKEN</code>. It stays in this
+      tab and is sent only to the server above.</p>
+
+    <p id="status" role="status"></p>
+    <section id="numbers" class="features" hidden></section>
+  </main>
+
+  <footer>
+    <div class="wrap">Tidebot is in early development. Feedback on the command list is welcome on
+      <a href="https://github.com/Pranjal2007v/Tidebot/issues">GitHub</a>.</div>
+  </footer>
+  <script src="dashboard.js"></script>
+</body>
+</html>

@@ -146,3 +146,40 @@ def test_config_script_writes_the_same_yaml_as_the_bot():
     assert cfg.pr_lint is False and cfg.star_gate is True
     assert cfg.reviewers == (("docs/", ("@alice", "@bob")), ("*.py", ("@org/backend",)))
     assert text == to_yaml(cfg)
+
+
+def test_every_page_links_to_the_dashboard():
+    for page in _pages():
+        assert "dashboard.html" in _parse(page).links, page
+
+
+def test_dashboard_has_its_form_and_script():
+    page = _parse("dashboard.html")
+    assert "dashboard.js" in page.links
+    assert {"lookup", "server", "repo", "token", "status", "numbers"} <= page.ids
+
+
+def test_dashboard_script_turns_a_stats_report_into_four_cards():
+    import json
+    from tidebot.metrics import Metrics
+    from tidebot.state import StateStore
+    store = StateStore(None)
+    store.set("stats", {"o/r": {"review": 3, "ping": 1}})
+    m = Metrics(store)
+    for seconds in (1.0, 2.5, 95.0):
+        m.record_wait("o/r", seconds)
+    m.record_reply("o/r", "review")
+    m.record_duplicates("o/r", 4)
+    script = (f"const d = require({json.dumps(str(SITE / 'dashboard.js'))});"
+              f"process.stdout.write(JSON.stringify({{cards: d.cards({json.dumps(m.report('o/r'))}),"
+              "empty: d.cards({repo: 'o/r'}), url: d.statsUrl('https://bot.test/', 'o/r'),"
+              "problems: [401, 404, 500].map(d.problem)}));")
+    out = json.loads(_node(script))
+    assert [c["label"] for c in out["cards"]] == [
+        "Commands run", "Median queue wait", "Reviews posted", "Duplicates caught"]
+    assert [c["value"] for c in out["cards"]] == ["4", "2.5s", "1", "1"]
+    assert out["cards"][0]["detail"] == "/review 3, /ping 1"
+    assert out["cards"][1]["detail"] == "3 AI jobs, longest 1m 35s"
+    assert [c["value"] for c in out["empty"]] == ["0", "none yet", "0", "0"]
+    assert out["url"] == "https://bot.test/api/stats/o/r"
+    assert "token" in out["problems"][0] and "turned off" in out["problems"][1]
