@@ -21,7 +21,8 @@ at ``/api/stats``) to callers that send it as a bearer token, and
 read them. Set ``TIDEBOT_GITHUB_CLIENT_ID``, ``TIDEBOT_GITHUB_CLIENT_SECRET``
 (from the App's OAuth settings) and ``TIDEBOT_PUBLIC_URL`` (the bot's own
 address, such as ``https://bot.example.com``) to let maintainers sign in to the
-dashboard with GitHub at ``/auth/login``.
+dashboard with GitHub at ``/auth/login``. A signed-in maintainer sees the
+numbers only for repos they can push to.
 """
 
 from __future__ import annotations
@@ -72,6 +73,8 @@ ClientFactory = Callable[[int], GitHubClient]
 REMINDER_INTERVAL = 60
 # The cookie that holds a dashboard sign-in.
 SESSION_COOKIE = "tidebot_session"
+# How long to trust a "can push" answer from GitHub, in seconds.
+PUSH_CHECK_TTL = 300
 # (event, action) pairs Tidebot answers automatically, with the payload key
 # holding the PR or issue and the handler to run.
 _EVENT_HANDLERS = {
@@ -167,12 +170,28 @@ def create_app(secret: str, store: StateStore,
                            allow_methods=["GET", "POST"], allow_headers=["Authorization"],
                            allow_credentials=True)
 
-    def check_stats_token(authorization: Optional[str]) -> None:
-        # Off unless a token is set; the dashboard's GitHub sign-in comes later.
-        if not stats_token:
+    signin_on = oauth is not None and bool(public_url)
+
+    def stats_access(authorization: Optional[str], sid: Optional[str]) -> Optional[dict]:
+        """None for the shared token (every repo), else the signed-in session."""
+        if not stats_token and not signin_on:
             raise HTTPException(status_code=404, detail="stats are turned off")
-        if not hmac.compare_digest(authorization or "", f"Bearer {stats_token}"):
-            raise HTTPException(status_code=401, detail="bad token")
+        if stats_token and hmac.compare_digest(authorization or "", f"Bearer {stats_token}"):
+            return None
+        session = sessions.get(sid) if signin_on else None
+        if session is None:
+            raise HTTPException(status_code=401, detail="bad token or not signed in")
+        return session
+
+    def can_push(session: Optional[dict], repo: str) -> bool:
+        if session is None:
+            return True
+        now = sessions.clock()
+        known = session["push"].get(repo)
+        if known is None or known[1] <= now:
+            known = (oauth.can_push(session["token"], repo), now + PUSH_CHECK_TTL)
+            session["push"][repo] = known
+        return known[0]
 
     def check_signin_on() -> OAuthApp:
         if oauth is None or not public_url:
@@ -226,14 +245,19 @@ def create_app(secret: str, store: StateStore,
         return {"ok": True}
 
     @app.get("/api/stats")
-    def stats_repos(authorization: Optional[str] = Header(None)):
-        check_stats_token(authorization)
-        return {"repos": metrics.repos()}
+    def stats_repos(authorization: Optional[str] = Header(None),
+                    tidebot_session: Optional[str] = Cookie(None)):
+        session = stats_access(authorization, tidebot_session)
+        return {"repos": [r for r in metrics.repos() if can_push(session, r)]}
 
     @app.get("/api/stats/{owner}/{name}")
-    def repo_stats(owner: str, name: str, authorization: Optional[str] = Header(None)):
-        check_stats_token(authorization)
-        return metrics.report(f"{owner}/{name}")
+    def repo_stats(owner: str, name: str, authorization: Optional[str] = Header(None),
+                   tidebot_session: Optional[str] = Cookie(None)):
+        session = stats_access(authorization, tidebot_session)
+        repo = f"{owner}/{name}"
+        if not can_push(session, repo):
+            raise HTTPException(status_code=403, detail="you can't push to that repo")
+        return metrics.report(repo)
 
     @app.post("/webhook")
     async def webhook(request: Request):

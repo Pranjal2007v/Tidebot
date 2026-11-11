@@ -106,3 +106,45 @@ def test_dashboard_origin_may_send_its_cookie():
     pre = c.options("/auth/me", headers={"Origin": DASH, "Access-Control-Request-Method": "GET"})
     assert pre.headers["access-control-allow-credentials"] == "true"
     assert pre.headers["access-control-allow-origin"] == DASH
+
+
+def signed_in(push, **kwargs):
+    store = StateStore(None)
+    store.set("stats", {"o/r": {"ping": 2}, "o/other": {"help": 1}, "x/y": {"ping": 1}})
+    oauth = FakeOAuth(push)
+    sessions, c = app(oauth, store, **kwargs)
+    sid = sign_in(c).headers["set-cookie"].split(";")[0].split("=", 1)[1]
+    return oauth, sessions, c, {"Cookie": f"{SESSION_COOKIE}={sid}"}
+
+
+def test_signed_in_users_see_only_repos_they_can_push_to():
+    oauth, _, c, cookie = signed_in({"o/r", "x/y"})
+    assert c.get("/api/stats", headers=cookie).json() == {"repos": ["o/r", "x/y"]}
+    assert c.get("/api/stats/o/r", headers=cookie).json()["commands"]["total"] == 2
+    assert c.get("/api/stats/o/other", headers=cookie).status_code == 403
+    # Answers are cached, so a second look doesn't ask GitHub again.
+    c.get("/api/stats", headers=cookie)
+    assert sorted(oauth.checked) == ["o/other", "o/r", "x/y"]
+
+
+def test_push_answers_expire():
+    oauth, sessions, c, cookie = signed_in({"o/r"})
+    now = [5000.0]
+    sessions.clock = lambda: now[0]
+    c.get("/api/stats/o/r", headers=cookie)
+    c.get("/api/stats/o/r", headers=cookie)
+    now[0] += 301
+    c.get("/api/stats/o/r", headers=cookie)
+    assert oauth.checked.count("o/r") == 2
+
+
+def test_stats_need_a_token_or_a_session():
+    _, _, c, _ = signed_in({"o/r"})
+    assert c.get("/api/stats").status_code == 401
+    assert c.get("/api/stats/o/r", headers={"Cookie": f"{SESSION_COOKIE}=guess"}).status_code == 401
+
+
+def test_the_shared_token_still_sees_every_repo():
+    _, _, c, _ = signed_in(set(), stats_token="t0ken")
+    res = c.get("/api/stats", headers={"Authorization": "Bearer t0ken"})
+    assert res.json() == {"repos": ["o/other", "o/r", "x/y"]}
