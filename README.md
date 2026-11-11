@@ -123,8 +123,8 @@ A companion website is planned with four parts:
 
 - [x] Core bot: webhooks, workflow commands, permission tiers
 - [x] AI commands, review pipeline, duplicate detection
-- [ ] Website: landing page, command reference, config builder
-- [ ] Dashboard
+- [x] Website: landing page, command reference, config builder
+- [x] Dashboard
 - [ ] Hosted option, so repos don't have to run it themselves
 
 ## Getting started

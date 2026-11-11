@@ -34,12 +34,17 @@
       <input id="repo" name="repo" type="text" placeholder="owner/name" pattern="[^/\s]+/[^/\s]+" list="repos" required>
       <datalist id="repos"></datalist>
       <label for="token">Token</label>
-      <input id="token" name="token" type="password" autocomplete="off" required>
+      <input id="token" name="token" type="password" autocomplete="off" placeholder="optional when signed in">
       <button class="button" type="submit">Show</button>
     </form>
-    <p class="note">The token is the server's <code>TIDEBOT_STATS_TOKEN</code>. It stays in this
-      tab and is sent only to the server above. Once it is accepted, the repo box offers every
-      repo the server has numbers for. The server must list this site in
+    <p>
+      <a id="signin" class="button" href="#" hidden>Sign in with GitHub</a>
+      <span id="who"></span>
+      <button id="signout" class="button secondary" type="button" hidden>Sign out</button>
+    </p>
+    <p class="note">Sign in with GitHub to see the repos you can push to; the repo box then offers
+      them. Or type the server's <code>TIDEBOT_STATS_TOKEN</code> to see every repo: it stays in
+      this tab and is sent only to the server above. Either way the server must list this site in
       <code>TIDEBOT_DASHBOARD_ORIGINS</code>.</p>
 
     <p id="status" role="status"></p>

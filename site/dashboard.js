@@ -1,4 +1,5 @@
 // Read one repo's numbers from a Tidebot server and show them as four cards.
+// Sign in with GitHub on the server, or use its shared stats token.
 (function () {
   function seconds(value) {
     if (value === null || value === undefined) return "none yet";
@@ -37,8 +38,9 @@
 
   // What to tell the reader when the server doesn't answer with numbers.
   function problem(status) {
-    if (status === 401) return "The server refused the token.";
-    if (status === 404) return "Stats are turned off on that server (TIDEBOT_STATS_TOKEN is not set).";
+    if (status === 401) return "Sign in with GitHub, or check the token.";
+    if (status === 403) return "You can't push to that repo, so its numbers stay hidden.";
+    if (status === 404) return "Stats are turned off on that server (no TIDEBOT_STATS_TOKEN and no GitHub sign-in).";
     return "The server answered " + status + ".";
   }
 
@@ -48,8 +50,25 @@
     return repo ? base + "/" + repo.split("/").map(encodeURIComponent).join("/") : base;
   }
 
+  function authUrl(server, path) {
+    return server.replace(/\/+$/, "") + "/auth/" + path;
+  }
+
+  // The server's sign-in link, coming back to this page afterwards.
+  function loginUrl(server, returnTo) {
+    return authUrl(server, "login") + "?return_to=" + encodeURIComponent(returnTo);
+  }
+
+  // Fetch options: the sign-in cookie always goes along, the token only if typed.
+  function request(token) {
+    var options = { credentials: "include", headers: {} };
+    if (token) options.headers.Authorization = "Bearer " + token;
+    return options;
+  }
+
   if (typeof module !== "undefined" && module.exports) {
-    module.exports = { cards: cards, problem: problem, seconds: seconds, statsUrl: statsUrl };
+    module.exports = { cards: cards, problem: problem, seconds: seconds, statsUrl: statsUrl,
+                       loginUrl: loginUrl, authUrl: authUrl, request: request };
     return;
   }
 
@@ -57,6 +76,9 @@
   var status = document.getElementById("status");
   var numbers = document.getElementById("numbers");
   var known = document.getElementById("repos");
+  var signin = document.getElementById("signin");
+  var signout = document.getElementById("signout");
+  var who = document.getElementById("who");
   if (!form) return;
 
   // Remember the server and repo, never the token.
@@ -84,9 +106,36 @@
     numbers.hidden = false;
   }
 
+  // Point the sign-in button at the server and say who is signed in there.
+  function checkSignin() {
+    var server = form.server.value.trim();
+    signin.hidden = !server;
+    signout.hidden = true;
+    who.textContent = "";
+    if (!server) return;
+    signin.href = loginUrl(server, location.href.split("#")[0]);
+    fetch(authUrl(server, "me"), request(""))
+      .then(function (res) { return res.ok ? res.json() : null; })
+      .then(function (me) {
+        if (!me) return;
+        who.textContent = "Signed in as @" + me.login + ".";
+        signin.hidden = true;
+        signout.hidden = false;
+        listRepos(server, request(""));
+      })
+      .catch(function () {});
+  }
+
+  form.server.addEventListener("change", checkSignin);
+  signout.addEventListener("click", function () {
+    fetch(authUrl(form.server.value.trim(), "logout"), { method: "POST", credentials: "include" })
+      .then(checkSignin, checkSignin);
+  });
+  checkSignin();
+
   // Offer the server's repos in the repo box; a failure here changes nothing.
-  function listRepos(server, headers) {
-    fetch(statsUrl(server), { headers: headers })
+  function listRepos(server, options) {
+    fetch(statsUrl(server), options)
       .then(function (res) { return res.ok ? res.json() : { repos: [] }; })
       .then(function (data) {
         known.textContent = "";
@@ -108,8 +157,8 @@
     } catch (e) { /* storage is optional */ }
     status.textContent = "Loading " + repo + "...";
     numbers.hidden = true;
-    var headers = { Authorization: "Bearer " + form.token.value };
-    fetch(statsUrl(server, repo), { headers: headers })
+    var options = request(form.token.value);
+    fetch(statsUrl(server, repo), options)
       .then(function (res) {
         if (!res.ok) throw new Error(problem(res.status));
         return res.json();
@@ -117,7 +166,7 @@
       .then(function (report) {
         status.textContent = "Numbers for " + report.repo + ".";
         show(report);
-        listRepos(server, headers);
+        listRepos(server, options);
       })
       .catch(function (err) {
         // fetch rejects with a TypeError when the request never gets an answer.

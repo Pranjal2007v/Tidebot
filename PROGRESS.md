@@ -360,3 +360,29 @@ The spec is [README.md](README.md). Work follows its [Roadmap](README.md#roadmap
 | B | bitflicker64 | himnshuverma10152006@gmail.com | `01c81817caa5509d31760e20789cc0980598f911` | feat: count issues that got a duplicates comment in the stats report |
 | C | Payal-Phougat | 226825128+Payal-Phougat@users.noreply.github.com | `2c0c2b1411cd07782a6a942c69fe297b11b55196` | feat: add a dashboard page that shows a repo's four numbers |
 | D | Pranjal2007v | pranjalgangwar910@gmail.com | `6c32ffc7771d247f3ca9d54bd37d32b7ca8c75fa` | feat: list repos for the dashboard and let its origin read the stats |
+
+## Run 15 (2026-11-11)
+
+**Estimated complete:** 75%
+
+**Added**
+
+- `tidebot/signin.py`: GitHub's OAuth web flow for the dashboard (authorize URL with a one-time state, code exchange, who the user is, whether they can push to a repo) and in-memory sessions that last a day, so user tokens never reach the state file.
+- `/auth/login`, `/auth/callback`, `/auth/me` and `/auth/logout` on the bot, on when `TIDEBOT_GITHUB_CLIENT_ID`, `TIDEBOT_GITHUB_CLIENT_SECRET` and `TIDEBOT_PUBLIC_URL` are set. Sign-in only returns to a page in `TIDEBOT_DASHBOARD_ORIGINS` and sets an `HttpOnly`, `Secure`, `SameSite=None` cookie so the dashboard on another site can send it.
+- The stats API takes either the shared token (every repo) or a sign-in, and a signed-in maintainer sees only the repos they can push to (403 for the rest). GitHub's answer is cached for five minutes per session.
+- `site/dashboard.html` has a "Sign in with GitHub" button, shows who is signed in with a sign-out button, and fills the repo box from the signed-in list. The token box is now optional.
+- The [Roadmap](README.md#roadmap)'s Website and Dashboard items are ticked.
+
+**Next 5%**
+
+- Start the hosted option from the [Roadmap](README.md#roadmap): a `Dockerfile` and a sample env file listing every `TIDEBOT_*` variable, so one server can run the bot for many repos.
+- A setup guide for the GitHub App (permissions, events, OAuth callback) that the README's [Getting started](README.md#getting-started) can link to once the project is done.
+
+**Blockers:** none. Sign-in asks only for `read:user`, so GitHub reports push access for public repos; private repos would need a wider scope, which hasn't been decided. The sign-in flow is covered by FastAPI tests with a fake OAuth app and hasn't been run against a real GitHub OAuth app or opened in a browser yet.
+
+| Commit | GitHub | Email | SHA | Message |
+|---|---|---|---|---|
+| A | bitflicker64 | himnshuverma10152006@gmail.com | `83e85853916425e47ea409ea382b86dac2646e8d` | feat: add the GitHub OAuth flow and sessions for dashboard sign-in |
+| B | Payal-Phougat | 226825128+Payal-Phougat@users.noreply.github.com | `258217714d8f595a5044bb64490c8875000af365` | feat: add GitHub sign-in endpoints for the dashboard |
+| C | Pranjal2007v | pranjalgangwar910@gmail.com | `3f99c063e09a8a5e951c75ed31ce139bc5bf07d9` | feat: show signed-in maintainers stats only for repos they can push to |
+| D | ishitasharma2490 | ishitasharma2490@gmail.com | *(this commit, filled in next run)* | feat: add a Sign in with GitHub button to the dashboard |

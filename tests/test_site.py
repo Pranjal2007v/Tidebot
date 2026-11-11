@@ -156,7 +156,8 @@ def test_every_page_links_to_the_dashboard():
 def test_dashboard_has_its_form_and_script():
     page = _parse("dashboard.html")
     assert "dashboard.js" in page.links
-    assert {"lookup", "server", "repo", "repos", "token", "status", "numbers"} <= page.ids
+    assert {"lookup", "server", "repo", "repos", "token", "status", "numbers",
+            "signin", "signout", "who"} <= page.ids
 
 
 def test_dashboard_script_turns_a_stats_report_into_four_cards():
@@ -174,7 +175,10 @@ def test_dashboard_script_turns_a_stats_report_into_four_cards():
               f"process.stdout.write(JSON.stringify({{cards: d.cards({json.dumps(m.report('o/r'))}),"
               "empty: d.cards({repo: 'o/r'}), url: d.statsUrl('https://bot.test/', 'o/r'),"
               "list: d.statsUrl('https://bot.test'),"
-              "problems: [401, 404, 500].map(d.problem)}));")
+              "problems: [401, 404, 500, 403].map(d.problem),"
+              "login: d.loginUrl('https://bot.test/', 'https://dash.test/dashboard.html?x=1'),"
+              "me: d.authUrl('https://bot.test//', 'me'),"
+              "bare: d.request(''), withToken: d.request('t0k')}));")
     out = json.loads(_node(script))
     assert [c["label"] for c in out["cards"]] == [
         "Commands run", "Median queue wait", "Reviews posted", "Duplicates caught"]
@@ -185,3 +189,9 @@ def test_dashboard_script_turns_a_stats_report_into_four_cards():
     assert out["url"] == "https://bot.test/api/stats/o/r"
     assert out["list"] == "https://bot.test/api/stats"
     assert "token" in out["problems"][0] and "turned off" in out["problems"][1]
+    assert "Sign in" in out["problems"][0] and "push" in out["problems"][3]
+    assert out["login"] == ("https://bot.test/auth/login?return_to="
+                            "https%3A%2F%2Fdash.test%2Fdashboard.html%3Fx%3D1")
+    assert out["me"] == "https://bot.test/auth/me"
+    assert out["bare"] == {"credentials": "include", "headers": {}}
+    assert out["withToken"]["headers"] == {"Authorization": "Bearer t0k"}
