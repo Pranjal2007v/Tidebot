@@ -18,7 +18,10 @@ serve per-repo numbers at ``/api/stats/<owner>/<repo>`` (and the list of repos
 at ``/api/stats``) to callers that send it as a bearer token, and
 ``TIDEBOT_DASHBOARD_ORIGINS`` (comma-separated, such as
 ``https://tidebot.example.com``) to let the dashboard page on those sites
-read them.
+read them. Set ``TIDEBOT_GITHUB_CLIENT_ID``, ``TIDEBOT_GITHUB_CLIENT_SECRET``
+(from the App's OAuth settings) and ``TIDEBOT_PUBLIC_URL`` (the bot's own
+address, such as ``https://bot.example.com``) to let maintainers sign in to the
+dashboard with GitHub at ``/auth/login``.
 """
 
 from __future__ import annotations
@@ -30,9 +33,11 @@ import os
 from contextlib import asynccontextmanager
 from functools import partial
 from typing import Callable, List, Optional, Sequence
+from urllib.parse import urlparse
 
-from fastapi import FastAPI, Header, HTTPException, Request
+from fastapi import Cookie, FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse, RedirectResponse
 
 from .ai import NOT_CONFIGURED, ai_from_env
 from .aicommands import AI_HANDLERS, make_job, usage_error
@@ -47,6 +52,7 @@ from .metrics import Metrics
 from .permissions import Tier, tier_for
 from .ratelimit import RateLimiter
 from .router import Action, route_comment
+from .signin import SESSION_TTL, OAuthApp, Sessions
 from .state import DEFAULT_PATH, StateStore
 from .webhook import verify_signature
 from .workflow import Target, run_command
@@ -64,6 +70,8 @@ PermissionLookup = Callable[[str, dict], Optional[str]]
 ClientFactory = Callable[[int], GitHubClient]
 # How often to look for reminders that are due, in seconds.
 REMINDER_INTERVAL = 60
+# The cookie that holds a dashboard sign-in.
+SESSION_COOKIE = "tidebot_session"
 # (event, action) pairs Tidebot answers automatically, with the payload key
 # holding the PR or issue and the handler to run.
 _EVENT_HANDLERS = {
@@ -101,16 +109,26 @@ def _reply_for(gh: GitHubClient, target: Target, action: Action,
         return f"`/{name}` failed: GitHub answered {err.status}"
 
 
+def _origin(url: str) -> str:
+    parts = urlparse(url)
+    return f"{parts.scheme}://{parts.netloc}" if parts.scheme and parts.netloc else ""
+
+
 def create_app(secret: str, store: StateStore,
                permission_lookup: PermissionLookup = permission_from_association,
                github: Optional[ClientFactory] = None,
                reminder_interval: float = REMINDER_INTERVAL,
                ai: Optional[AIQueue] = None,
                stats_token: Optional[str] = None,
-               dashboard_origins: Sequence[str] = ()) -> FastAPI:
+               dashboard_origins: Sequence[str] = (),
+               oauth: Optional[OAuthApp] = None,
+               public_url: str = "",
+               sessions: Optional[Sessions] = None) -> FastAPI:
     limiter = RateLimiter(store)
     community = Community(store)
     metrics = Metrics(store)
+    sessions = sessions or Sessions()
+    callback_url = public_url.rstrip("/") + "/auth/callback"
     if ai is not None and ai.on_wait is None:
         ai.on_wait = metrics.record_wait
     # New issues may queue an AI check on borderline duplicates.
@@ -144,8 +162,10 @@ def create_app(secret: str, store: StateStore,
     app = FastAPI(title="Tidebot", lifespan=lifespan)
     if dashboard_origins:
         # The dashboard is a static page on another site, so the browser asks first.
+        # Credentials let the page send the sign-in cookie along.
         app.add_middleware(CORSMiddleware, allow_origins=list(dashboard_origins),
-                           allow_methods=["GET"], allow_headers=["Authorization"])
+                           allow_methods=["GET", "POST"], allow_headers=["Authorization"],
+                           allow_credentials=True)
 
     def check_stats_token(authorization: Optional[str]) -> None:
         # Off unless a token is set; the dashboard's GitHub sign-in comes later.
@@ -153,6 +173,53 @@ def create_app(secret: str, store: StateStore,
             raise HTTPException(status_code=404, detail="stats are turned off")
         if not hmac.compare_digest(authorization or "", f"Bearer {stats_token}"):
             raise HTTPException(status_code=401, detail="bad token")
+
+    def check_signin_on() -> OAuthApp:
+        if oauth is None or not public_url:
+            raise HTTPException(status_code=404, detail="sign-in is turned off")
+        return oauth
+
+    @app.get("/auth/login")
+    def login(return_to: str = ""):
+        flow = check_signin_on()
+        # Only send people back to a dashboard this bot trusts.
+        if _origin(return_to) not in dashboard_origins:
+            raise HTTPException(status_code=400, detail="return_to is not a dashboard origin")
+        state = sessions.new_state(return_to)
+        return RedirectResponse(flow.authorize_url(state, callback_url), status_code=302)
+
+    @app.get("/auth/callback")
+    def callback(code: str = "", state: str = ""):
+        flow = check_signin_on()
+        return_to = sessions.take_state(state)
+        if return_to is None:
+            raise HTTPException(status_code=400, detail="sign-in link expired, try again")
+        try:
+            token = flow.exchange(code, callback_url)
+            who = flow.login(token)
+        except GitHubError as err:
+            raise HTTPException(status_code=502, detail=f"GitHub sign-in failed: {err.status}")
+        res = RedirectResponse(return_to, status_code=302)
+        # The dashboard lives on another site, so the cookie must be SameSite=None.
+        res.set_cookie(SESSION_COOKIE, sessions.start(who, token), max_age=SESSION_TTL,
+                       httponly=True, secure=True, samesite="none")
+        return res
+
+    @app.get("/auth/me")
+    def me(tidebot_session: Optional[str] = Cookie(None)):
+        check_signin_on()
+        session = sessions.get(tidebot_session)
+        if session is None:
+            raise HTTPException(status_code=401, detail="not signed in")
+        return {"login": session["login"]}
+
+    @app.post("/auth/logout")
+    def logout(tidebot_session: Optional[str] = Cookie(None)):
+        check_signin_on()
+        sessions.end(tidebot_session)
+        res = JSONResponse({"ok": True})
+        res.delete_cookie(SESSION_COOKIE, httponly=True, secure=True, samesite="none")
+        return res
 
     @app.get("/healthz")
     def healthz():
@@ -256,6 +323,12 @@ def _origins(text: str) -> List[str]:
     return [o.strip().rstrip("/") for o in text.split(",") if o.strip()]
 
 
+def _oauth_from_env() -> Optional[OAuthApp]:
+    client_id = os.environ.get("TIDEBOT_GITHUB_CLIENT_ID")
+    client_secret = os.environ.get("TIDEBOT_GITHUB_CLIENT_SECRET")
+    return OAuthApp(client_id, client_secret) if client_id and client_secret else None
+
+
 def _app_from_env() -> FastAPI:
     model = ai_from_env()
     return create_app(os.environ.get("TIDEBOT_WEBHOOK_SECRET", ""),
@@ -263,7 +336,9 @@ def _app_from_env() -> FastAPI:
                       github=_github_from_env(),
                       ai=AIQueue(model) if model else None,
                       stats_token=os.environ.get("TIDEBOT_STATS_TOKEN"),
-                      dashboard_origins=_origins(os.environ.get("TIDEBOT_DASHBOARD_ORIGINS", "")))
+                      dashboard_origins=_origins(os.environ.get("TIDEBOT_DASHBOARD_ORIGINS", "")),
+                      oauth=_oauth_from_env(),
+                      public_url=os.environ.get("TIDEBOT_PUBLIC_URL", ""))
 
 
 app = _app_from_env()
