@@ -359,4 +359,4 @@ The spec is [README.md](README.md). Work follows its [Roadmap](README.md#roadmap
 | A | ishitasharma2490 | ishitasharma2490@gmail.com | `b8f09dbb061d8f7fc131b8744b5575d38ad1a0b2` | feat: count reviews posted per repo for the dashboard |
 | B | bitflicker64 | himnshuverma10152006@gmail.com | `01c81817caa5509d31760e20789cc0980598f911` | feat: count issues that got a duplicates comment in the stats report |
 | C | Payal-Phougat | 226825128+Payal-Phougat@users.noreply.github.com | `2c0c2b1411cd07782a6a942c69fe297b11b55196` | feat: add a dashboard page that shows a repo's four numbers |
-| D | Pranjal2007v | pranjalgangwar910@gmail.com | *(this commit, filled in next run)* | feat: list repos for the dashboard and let its origin read the stats |
+| D | Pranjal2007v | pranjalgangwar910@gmail.com | `6c32ffc7771d247f3ca9d54bd37d32b7ca8c75fa` | feat: list repos for the dashboard and let its origin read the stats |
