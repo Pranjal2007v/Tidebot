@@ -386,3 +386,28 @@ The spec is [README.md](README.md). Work follows its [Roadmap](README.md#roadmap
 | B | Payal-Phougat | 226825128+Payal-Phougat@users.noreply.github.com | `258217714d8f595a5044bb64490c8875000af365` | feat: add GitHub sign-in endpoints for the dashboard |
 | C | Pranjal2007v | pranjalgangwar910@gmail.com | `3f99c063e09a8a5e951c75ed31ce139bc5bf07d9` | feat: show signed-in maintainers stats only for repos they can push to |
 | D | ishitasharma2490 | ishitasharma2490@gmail.com | `ec015703a0e80eb8df5d6226494cf3835acbb1ad` | feat: add a Sign in with GitHub button to the dashboard |
+
+## Run 16 (2026-11-12)
+
+**Estimated complete:** 80%
+
+**Added**
+
+- The start of the hosted option from the [Roadmap](README.md#roadmap). `.env.example` lists every `TIDEBOT_*` setting with a line on each; a test fails if the code reads a variable the file doesn't list, or the other way round.
+- A `Dockerfile` and `.dockerignore`: one container runs the bot for every repo the App is installed on, as a non-root user, with the state file on a `/data` volume and a health check on `/healthz`. `uvicorn` is now the `serve` extra in `pyproject.toml`. The image was built and started on a Linux box with Docker, and the health check reported healthy.
+- `python -m tidebot.doctor` prints whether each feature (webhook, state, replies, AI, stats token, dashboard, sign-in) is on, off or set up wrongly, such as half of a group set, an unreadable `.pem`, an `http://` public URL or sign-in with no dashboard origin, and exits 1 on any error. It never prints a secret.
+- `docs/setup.md`, the GitHub App setup guide: webhook and callback URLs, the permissions table, the events to subscribe to, running with Docker or `uvicorn`, and hosting the dashboard. Tests check that its events match what the bot handles, its URLs are real routes and every setting it names is in `.env.example`.
+
+**Next 5%**
+
+- Hosted option: let one server hold per-installation settings (such as which AI endpoint an installation uses) instead of one set for everyone, and a `/healthz` that also reports the AI queue length.
+- Point the README's [Getting started](README.md#getting-started) at `docs/setup.md` once the hosted option is done.
+
+**Blockers:** none. The guide's permission list comes from the API calls in `tidebot/github.py` and hasn't been tried on a real GitHub App yet. Still not run against a live GitHub App or a real model endpoint.
+
+| Commit | GitHub | Email | SHA | Message |
+|---|---|---|---|---|
+| A | Payal-Phougat | 226825128+Payal-Phougat@users.noreply.github.com | `b711caef55fe5534f9f9236541443a8c093ee9a3` | feat: add a sample env file listing every TIDEBOT_* variable |
+| B | Pranjal2007v | pranjalgangwar910@gmail.com | `4c8712e04bb14e8965d18f32decc7c5191367d05` | feat: add a Dockerfile that runs the bot with state on a volume |
+| C | ishitasharma2490 | ishitasharma2490@gmail.com | `be7cab3f710dd9a97b0a145a431db10798d7053a` | feat: add a doctor command that checks a server's settings |
+| D | bitflicker64 | himnshuverma10152006@gmail.com | *(this commit, filled in next run)* | docs: add a GitHub App setup guide for running your own bot |
