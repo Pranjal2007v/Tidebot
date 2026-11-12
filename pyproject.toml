@@ -12,6 +12,7 @@ dependencies = ["PyYAML>=6.0", "fastapi>=0.100", "httpx>=0.24", "PyJWT[crypto]>=
 
 [project.optional-dependencies]
 dev = ["pytest>=7"]
+serve = ["uvicorn>=0.22"]
 
 [tool.setuptools]
 packages = ["tidebot"]
