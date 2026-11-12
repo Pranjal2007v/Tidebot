@@ -385,4 +385,4 @@ The spec is [README.md](README.md). Work follows its [Roadmap](README.md#roadmap
 | A | bitflicker64 | himnshuverma10152006@gmail.com | `83e85853916425e47ea409ea382b86dac2646e8d` | feat: add the GitHub OAuth flow and sessions for dashboard sign-in |
 | B | Payal-Phougat | 226825128+Payal-Phougat@users.noreply.github.com | `258217714d8f595a5044bb64490c8875000af365` | feat: add GitHub sign-in endpoints for the dashboard |
 | C | Pranjal2007v | pranjalgangwar910@gmail.com | `3f99c063e09a8a5e951c75ed31ce139bc5bf07d9` | feat: show signed-in maintainers stats only for repos they can push to |
-| D | ishitasharma2490 | ishitasharma2490@gmail.com | *(this commit, filled in next run)* | feat: add a Sign in with GitHub button to the dashboard |
+| D | ishitasharma2490 | ishitasharma2490@gmail.com | `ec015703a0e80eb8df5d6226494cf3835acbb1ad` | feat: add a Sign in with GitHub button to the dashboard |
