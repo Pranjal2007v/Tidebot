@@ -72,7 +72,7 @@ set -a; . ./.env; set +a
 uvicorn tidebot.app:app --host 127.0.0.1 --port 8000 --proxy-headers
 ```
 
-`GET /healthz` answers `{"ok": true}` once the bot is up.
+`GET /healthz` answers with `"ok": true` once the bot is up. Its `ai` part says whether AI commands are on and how many AI jobs are waiting or running (`queued`), which shows when the model can't keep up.
 
 ## 5. Install it on a repo
 

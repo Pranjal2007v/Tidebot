@@ -32,7 +32,24 @@ def comment_payload(body, association="NONE", login="alice", action="created"):
 
 
 def test_healthz():
-    assert client().get("/healthz").json() == {"ok": True}
+    assert client().get("/healthz").json() == {"ok": True, "ai": {"on": False, "queued": 0}}
+
+
+def test_healthz_reports_the_ai_queue_length():
+    import threading
+
+    from tidebot.aiqueue import AIQueue
+
+    queue = AIQueue(client=None)
+    c = TestClient(create_app(SECRET, StateStore(None), ai=queue))
+    assert c.get("/healthz").json()["ai"] == {"on": True, "queued": 0}
+    gate = threading.Event()
+    queue.submit(lambda model: gate.wait(5))
+    queue.submit(lambda model: None)
+    assert c.get("/healthz").json()["ai"] == {"on": True, "queued": 2}
+    gate.set()
+    queue.join()
+    assert c.get("/healthz").json()["ai"] == {"on": True, "queued": 0}
 
 
 def test_bad_signature_is_rejected():

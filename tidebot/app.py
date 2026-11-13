@@ -242,7 +242,9 @@ def create_app(secret: str, store: StateStore,
 
     @app.get("/healthz")
     def healthz():
-        return {"ok": True}
+        # A hosted setup watches the queue to see when the model can't keep up.
+        return {"ok": True, "ai": {"on": ai is not None,
+                                   "queued": ai.pending if ai is not None else 0}}
 
     @app.get("/api/stats")
     def stats_repos(authorization: Optional[str] = Header(None),

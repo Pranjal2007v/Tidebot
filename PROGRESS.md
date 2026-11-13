@@ -410,4 +410,4 @@ The spec is [README.md](README.md). Work follows its [Roadmap](README.md#roadmap
 | A | Payal-Phougat | 226825128+Payal-Phougat@users.noreply.github.com | `b711caef55fe5534f9f9236541443a8c093ee9a3` | feat: add a sample env file listing every TIDEBOT_* variable |
 | B | Pranjal2007v | pranjalgangwar910@gmail.com | `4c8712e04bb14e8965d18f32decc7c5191367d05` | feat: add a Dockerfile that runs the bot with state on a volume |
 | C | ishitasharma2490 | ishitasharma2490@gmail.com | `be7cab3f710dd9a97b0a145a431db10798d7053a` | feat: add a doctor command that checks a server's settings |
-| D | bitflicker64 | himnshuverma10152006@gmail.com | *(this commit, filled in next run)* | docs: add a GitHub App setup guide for running your own bot |
+| D | bitflicker64 | himnshuverma10152006@gmail.com | `1e275ac5865c500949275d42f408dfc158334d1c` | docs: add a GitHub App setup guide for running your own bot |
