@@ -411,3 +411,28 @@ The spec is [README.md](README.md). Work follows its [Roadmap](README.md#roadmap
 | B | Pranjal2007v | pranjalgangwar910@gmail.com | `4c8712e04bb14e8965d18f32decc7c5191367d05` | feat: add a Dockerfile that runs the bot with state on a volume |
 | C | ishitasharma2490 | ishitasharma2490@gmail.com | `be7cab3f710dd9a97b0a145a431db10798d7053a` | feat: add a doctor command that checks a server's settings |
 | D | bitflicker64 | himnshuverma10152006@gmail.com | `1e275ac5865c500949275d42f408dfc158334d1c` | docs: add a GitHub App setup guide for running your own bot |
+
+## Run 17 (2026-11-13)
+
+**Estimated complete:** 85%
+
+**Added**
+
+- `GET /healthz` now also reports the AI queue: whether AI commands are on and how many AI jobs are waiting or running, so a hosted setup can see when the model can't keep up.
+- `tidebot/installations.py`: per-installation settings for the hosted option from the [Roadmap](README.md#roadmap). A JSON file keyed by installation id gives an installation its own AI endpoint, model and optional key. A wrong file is refused with a message that names the installation and the key, never a value.
+- `TIDEBOT_INSTALLATIONS` points the bot at that file. `/ask` and the other AI commands, and the AI check on borderline duplicates, run against the installation's own model when it has one and the server's model otherwise. Every installation's jobs still wait in the one queue (`AIQueue.using`), so the server runs one model call at a time. `installations.json` is in `.gitignore` and `.dockerignore`.
+- `python -m tidebot.doctor` has an `installations` line: how many installations have their own model and what the rest get, or what is wrong with the file. `docs/setup.md` has a section on the file.
+
+**Next 5%**
+
+- Hosted option: stop one installation from filling the shared AI queue (a cap on jobs waiting per installation), and drop an installation's reminders when the App is uninstalled.
+- Then tick the last [Roadmap](README.md#roadmap) item and point the README's [Getting started](README.md#getting-started) at `docs/setup.md`.
+
+**Blockers:** none. The installations file is read once at startup, so a change needs a restart. Per-installation models are covered by tests with fake models and haven't been run against two real endpoints. Still not run against a live GitHub App or a real model endpoint.
+
+| Commit | GitHub | Email | SHA | Message |
+|---|---|---|---|---|
+| A | Pranjal2007v | pranjalgangwar910@gmail.com | `ec140e00a0094200e4598dfcbb457e84fa970364` | feat: report the AI queue length on /healthz |
+| B | ishitasharma2490 | ishitasharma2490@gmail.com | `c4f9d78946be0ef20bf5105bfa08ab0a8503ee24` | feat: read per-installation AI settings from a JSON file |
+| C | bitflicker64 | himnshuverma10152006@gmail.com | `e8a25156492dee71ab34f8d74874a414226ca36b` | feat: run each installation's AI jobs against its own model |
+| D | Payal-Phougat | 226825128+Payal-Phougat@users.noreply.github.com | *(this commit, filled in next run)* | feat: check the installations file in the doctor and document it |

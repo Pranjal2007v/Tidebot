@@ -81,3 +81,21 @@ On the App's page, choose **Install App** and pick the repos. GitHub sends a `pi
 ## 6. The dashboard (optional)
 
 The dashboard is the static `site/` folder. Host it anywhere, add its site (such as `https://tidebot.example.com`) to `TIDEBOT_DASHBOARD_ORIGINS`, and restart the bot. Maintainers sign in with GitHub and see numbers only for repos they can push to. To read every repo with one token instead, set `TIDEBOT_STATS_TOKEN` and paste it into the dashboard's token box.
+
+## 7. A different model per installation (optional)
+
+Every account or organization that installs the App is one installation, and all of them share the model in `TIDEBOT_AI_URL` and `TIDEBOT_AI_MODEL`. To give some of them their own, write a JSON file keyed by installation id, the number at the end of the installation's settings URL (`.../settings/installations/12345678`):
+
+```json
+{
+  "12345678": {
+    "ai_url": "https://api.example.com/v1",
+    "ai_model": "small-model",
+    "ai_key": "optional"
+  }
+}
+```
+
+Point `TIDEBOT_INSTALLATIONS` at the file and restart the bot. With Docker, mount it read-only next to the private key, such as `-v "$PWD/installations.json:/run/secrets/installations.json:ro"`. An installation the file doesn't list keeps using the server's model, or has no AI commands when the server has none. AI jobs from every installation still wait in one queue, so the server runs one model call at a time.
+
+The file holds API keys: never commit it (`.gitignore` already skips `installations.json`). `python -m tidebot.doctor` says how many installations it lists and names the installation and key when an entry is wrong.

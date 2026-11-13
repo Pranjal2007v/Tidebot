@@ -15,6 +15,8 @@ from pathlib import Path
 from typing import List, Mapping, NamedTuple
 from urllib.parse import urlparse
 
+from .installations import InstallationsError, load_installations
+
 ON, OFF, ERROR = "on", "off", "error"
 
 
@@ -82,6 +84,21 @@ def check(env: Mapping[str, str]) -> List[Check]:
         ai = Check("ai", ERROR, "TIDEBOT_AI_KEY is set but TIDEBOT_AI_URL and "
                                 "TIDEBOT_AI_MODEL are not")
     checks.append(ai)
+
+    path = _get(env, "TIDEBOT_INSTALLATIONS")
+    if not path:
+        checks.append(Check("installations", OFF, "set TIDEBOT_INSTALLATIONS to give some "
+                                                  "installations their own model"))
+    else:
+        try:
+            count = len(load_installations(path))
+        except InstallationsError as err:
+            checks.append(Check("installations", ERROR, str(err)))
+        else:
+            own = "1 installation uses its" if count == 1 else f"{count} installations use their"
+            rest = ("the rest use " + _get(env, "TIDEBOT_AI_MODEL") if ai.status == ON
+                    else "the rest have no AI commands")
+            checks.append(Check("installations", ON, f"{own} own model; {rest}"))
 
     if _get(env, "TIDEBOT_STATS_TOKEN"):
         checks.append(Check("stats token", ON, "the token can read every repo's numbers"))
