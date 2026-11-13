@@ -5,6 +5,10 @@ the model so a small server never runs several slow model calls at once.
 ``AIQueue`` keeps one worker thread that takes jobs in the order they came
 in. A job is any function of the ``AIClient``; it posts its own reply when
 it is done, so the webhook can answer GitHub right away.
+
+One queue serves every installation of the App. An installation with its own
+model submits through ``queue.using(client)``: its jobs wait in the same line
+but run against that client.
 """
 
 from __future__ import annotations
@@ -22,12 +26,12 @@ WaitHook = Callable[[str, float], None]
 
 
 class AIQueue:
-    def __init__(self, client: AIClient, on_wait: Optional[WaitHook] = None,
+    def __init__(self, client: Optional[AIClient], on_wait: Optional[WaitHook] = None,
                  clock: Callable[[], float] = time.monotonic):
         self.client = client
         self.on_wait = on_wait
         self._clock = clock
-        self._jobs: "queue.Queue[Tuple[Job, str, float]]" = queue.Queue()
+        self._jobs: "queue.Queue[Tuple[Job, str, float, Optional[AIClient]]]" = queue.Queue()
         self._lock = threading.Lock()
         self._pending = 0
         self._worker: Optional[threading.Thread] = None
@@ -38,8 +42,11 @@ class AIQueue:
         with self._lock:
             return self._pending
 
-    def submit(self, job: Job, repo: str = "") -> int:
-        """Queue ``job`` for ``repo`` and return how many jobs are ahead of it."""
+    def submit(self, job: Job, repo: str = "", client: Optional[AIClient] = None) -> int:
+        """Queue ``job`` for ``repo`` and return how many jobs are ahead of it.
+
+        The job gets ``client`` when one is given, else the queue's own.
+        """
         with self._lock:
             ahead = self._pending
             self._pending += 1
@@ -47,8 +54,12 @@ class AIQueue:
                 self._worker = threading.Thread(target=self._run, name="tidebot-ai",
                                                 daemon=True)
                 self._worker.start()
-        self._jobs.put((job, repo, self._clock()))
+        self._jobs.put((job, repo, self._clock(), client))
         return ahead
+
+    def using(self, client: AIClient) -> "BoundQueue":
+        """This queue, with every submitted job run against ``client``."""
+        return BoundQueue(self, client)
 
     def join(self) -> None:
         """Wait until every queued job has finished."""
@@ -56,20 +67,31 @@ class AIQueue:
 
     def _run(self) -> None:
         while True:
-            job, repo, queued = self._jobs.get()
+            job, repo, queued, client = self._jobs.get()
             if self.on_wait is not None:
                 try:
                     self.on_wait(repo, self._clock() - queued)
                 except Exception as err:  # a metrics problem must not drop the job
                     print(f"tidebot: recording the queue wait failed: {err!r}")
             try:
-                job(self.client)
+                job(client if client is not None else self.client)
             except Exception as err:  # one bad job must not stop the queue
                 print(f"tidebot: AI job failed: {err!r}")
             finally:
                 with self._lock:
                     self._pending -= 1
                 self._jobs.task_done()
+
+
+class BoundQueue:
+    """What an installation with its own model sees: the shared queue, its client."""
+
+    def __init__(self, queue: AIQueue, client: AIClient):
+        self.queue = queue
+        self.client = client
+
+    def submit(self, job: Job, repo: str = "") -> int:
+        return self.queue.submit(job, repo, self.client)
 
 
 def waiting_note(name: str, ahead: int) -> Optional[str]:

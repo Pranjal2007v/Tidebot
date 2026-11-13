@@ -2,6 +2,7 @@
 .env
 *.pem
 state.json
+installations.json
 
 # Python
 __pycache__/

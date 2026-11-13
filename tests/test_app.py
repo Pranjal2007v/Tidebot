@@ -1,5 +1,6 @@
 import json
 
+import pytest
 from fastapi.testclient import TestClient
 
 from tidebot.app import create_app
@@ -302,3 +303,108 @@ def test_ai_command_is_queued_and_posts_its_answer():
         ("post_comment", "o/r", 3, "Usage: `:tide /ask where is auth handled?`"),
         ("post_comment", "o/r", 3, "`/ask` for @alice:\n\nIt is in app.py."),
     ]
+
+
+class NamedModel:
+    def __init__(self, name):
+        self.name = name
+
+    def ask(self, system, user, **kwargs):
+        return f"answered by {self.name}"
+
+
+class AskGitHub(FakeGitHub):
+    def issue(self, repo, number):
+        return {"title": "Where is auth?", "body": ""}
+
+
+def ask_as(installation, queue, ai_clients):
+    gh = AskGitHub()
+    c = TestClient(create_app(SECRET, StateStore(None), github=lambda i: gh, ai=queue,
+                              ai_clients=ai_clients))
+    payload = issue_payload(":tide /ask where is auth?")
+    payload["installation"] = {"id": installation}
+    post(c, "issue_comment", payload)
+    queue.join()
+    return gh.calls
+
+
+def test_an_installation_with_its_own_model_is_answered_by_it():
+    from tidebot.aiqueue import AIQueue
+
+    clients = {7: NamedModel("theirs")}
+    assert ask_as(7, AIQueue(NamedModel("the server's")), clients) == [
+        ("post_comment", "o/r", 3, "`/ask` for @alice:\n\nanswered by theirs")]
+    assert ask_as(99, AIQueue(NamedModel("the server's")), clients) == [
+        ("post_comment", "o/r", 3, "`/ask` for @alice:\n\nanswered by the server's")]
+
+
+def test_only_listed_installations_get_ai_when_the_server_has_no_model():
+    from tidebot.aiqueue import AIQueue
+
+    clients = {7: NamedModel("theirs")}
+    assert ask_as(7, AIQueue(None), clients) == [
+        ("post_comment", "o/r", 3, "`/ask` for @alice:\n\nanswered by theirs")]
+    assert ask_as(99, AIQueue(None), clients) == [
+        ("post_comment", "o/r", 3,
+         "`/ask`: AI commands are off here: this Tidebot has no model configured.")]
+
+
+def test_new_issue_duplicates_check_uses_the_installations_model():
+    from tidebot.aiqueue import AIQueue
+
+    asked = []
+
+    class Says:
+        def __init__(self, name):
+            self.name = name
+
+        def ask(self, system, user, **kwargs):
+            asked.append(self.name)
+            return "yes"
+
+    class Issues(FakeGitHub):
+        def open_issues(self, repo):
+            return [{"number": 1, "title": "Webhook crashes on startup",
+                     "body": "Crash when state file is missing on first run."},
+                    {"number": 2, "title": "Receiver fails when the state file is missing",
+                     "body": "Starting the receiver errors out."},
+                    {"number": 3, "title": "Add dark mode to dashboard",
+                     "body": "Please add a dark theme."}]
+
+        def repo_labels(self, repo):
+            return []
+
+        def add_labels(self, repo, number, labels):
+            pass
+
+    gh = Issues()
+    queue = AIQueue(Says("the server's"))
+    c = TestClient(create_app(SECRET, StateStore(None), github=lambda i: gh, ai=queue,
+                              ai_clients={7: Says("theirs")}))
+    post(c, "issues", {
+        "action": "opened", "repository": {"full_name": "o/r"}, "installation": {"id": 7},
+        "issue": {"number": 9, "title": "Webhook crashes on startup",
+                  "body": "The receiver crashes when the state file is missing."}})
+    queue.join()
+    assert asked == ["theirs"]
+
+
+def test_queue_and_installation_models_come_from_the_environment(tmp_path):
+    from tidebot.app import _ai_from_env
+    from tidebot.installations import InstallationsError
+
+    assert _ai_from_env({}) == (None, {})
+    queue, clients = _ai_from_env({"TIDEBOT_AI_URL": "https://a.example/v1",
+                                   "TIDEBOT_AI_MODEL": "m"})
+    assert queue.client.model == "m" and clients == {}
+
+    path = tmp_path / "installations.json"
+    path.write_text('{"7": {"ai_url": "https://b.example/v1", "ai_model": "theirs"}}')
+    queue, clients = _ai_from_env({"TIDEBOT_INSTALLATIONS": str(path)})
+    assert queue is not None and queue.client is None
+    assert clients[7].model == "theirs"
+
+    path.write_text("{")
+    with pytest.raises(InstallationsError):
+        _ai_from_env({"TIDEBOT_INSTALLATIONS": str(path)})

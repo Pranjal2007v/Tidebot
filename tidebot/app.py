@@ -13,7 +13,9 @@ its own answer when the model is done.
 Run it with ``uvicorn tidebot.app:app`` and ``TIDEBOT_WEBHOOK_SECRET`` set.
 Set ``TIDEBOT_APP_ID`` and ``TIDEBOT_PRIVATE_KEY`` (the path to the App's
 ``.pem`` file) to let it reply, and the ``TIDEBOT_AI_*`` variables described
-in ``tidebot/ai.py`` to turn on AI commands. Set ``TIDEBOT_STATS_TOKEN`` to
+in ``tidebot/ai.py`` to turn on AI commands. Set ``TIDEBOT_INSTALLATIONS`` to
+the path of a JSON file (see ``tidebot/installations.py``) to give some
+installations of the App their own model. Set ``TIDEBOT_STATS_TOKEN`` to
 serve per-repo numbers at ``/api/stats/<owner>/<repo>`` (and the list of repos
 at ``/api/stats``) to callers that send it as a bearer token, and
 ``TIDEBOT_DASHBOARD_ORIGINS`` (comma-separated, such as
@@ -33,22 +35,24 @@ import json
 import os
 from contextlib import asynccontextmanager
 from functools import partial
-from typing import Callable, List, Optional, Sequence
+from typing import Callable, Dict, List, Mapping, Optional, Sequence, Tuple, Union
 from urllib.parse import urlparse
 
 from fastapi import Cookie, FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, RedirectResponse
 
-from .ai import NOT_CONFIGURED, ai_from_env
+from .ai import NOT_CONFIGURED, AIClient, ai_from_env
 from .aicommands import AI_HANDLERS, make_job, usage_error
-from .aiqueue import AIQueue, waiting_note
+from .aiqueue import AIQueue, BoundQueue, waiting_note
 from .community import Community
 from .config import CONFIG_PATH, TideConfig, parse_config
 from .events import (claim_issue, issue_opened, pull_request_opened, pull_request_pushed,
                      pull_request_ready)
 from .github import AppAuth, GitHubClient, GitHubError
 from .help import help_text
+from .installations import ai_clients as installation_clients
+from .installations import load_installations
 from .metrics import Metrics
 from .permissions import Tier, tier_for
 from .ratelimit import RateLimiter
@@ -91,7 +95,7 @@ def permission_from_association(repo: str, comment: dict) -> Optional[str]:
 
 def _reply_for(gh: GitHubClient, target: Target, action: Action,
                permission: Optional[str], community: Community,
-               ai: Optional[AIQueue], metrics: Metrics) -> Optional[str]:
+               ai: Union[AIQueue, BoundQueue, None], metrics: Metrics) -> Optional[str]:
     name = action.command.name
     if not action.allowed:
         return f"`/{name}`: {action.reason}"
@@ -126,7 +130,10 @@ def create_app(secret: str, store: StateStore,
                dashboard_origins: Sequence[str] = (),
                oauth: Optional[OAuthApp] = None,
                public_url: str = "",
-               sessions: Optional[Sessions] = None) -> FastAPI:
+               sessions: Optional[Sessions] = None,
+               ai_clients: Optional[Mapping[int, AIClient]] = None) -> FastAPI:
+    """``ai_clients`` maps an installation id to the model that installation uses."""
+    ai_clients = ai_clients or {}
     limiter = RateLimiter(store)
     community = Community(store)
     metrics = Metrics(store)
@@ -134,9 +141,15 @@ def create_app(secret: str, store: StateStore,
     callback_url = public_url.rstrip("/") + "/auth/callback"
     if ai is not None and ai.on_wait is None:
         ai.on_wait = metrics.record_wait
-    # New issues may queue an AI check on borderline duplicates.
-    opened = partial(issue_opened, ai=ai, on_duplicates=metrics.record_duplicates)
-    event_handlers = {**_EVENT_HANDLERS, ("issues", "opened"): ("issue", opened)}
+
+    def ai_for(installation: Optional[int]) -> Union[AIQueue, BoundQueue, None]:
+        """The queue as this installation sees it, or None when it has no model."""
+        if ai is None:
+            return None
+        own = ai_clients.get(installation)
+        if own is not None:
+            return ai.using(own)
+        return ai if ai.client is not None else None
 
     def deliver_reminders() -> None:
         try:
@@ -279,9 +292,13 @@ def create_app(secret: str, store: StateStore,
         installation = payload.get("installation", {}).get("id")
         gh = github(installation) if github and installation else None
 
-        handled = event_handlers.get((event, payload.get("action", "")))
+        handled = _EVENT_HANDLERS.get((event, payload.get("action", "")))
         if handled and gh is not None:
             key, handler = handled
+            if handler is issue_opened:
+                # New issues may queue an AI check on borderline duplicates.
+                handler = partial(issue_opened, ai=ai_for(installation),
+                                  on_duplicates=metrics.record_duplicates)
             item = payload.get(key, {})
             if "number" in item:
                 config = parse_config(gh.fetch_file(repo, CONFIG_PATH))
@@ -316,8 +333,8 @@ def create_app(secret: str, store: StateStore,
         if gh is not None and "number" in issue:
             target = Target(repo, issue["number"], "pull_request" in issue, author,
                             installation)
-            replies = [r for r in (_reply_for(gh, target, a, permission, community, ai,
-                                                  metrics)
+            replies = [r for r in (_reply_for(gh, target, a, permission, community,
+                                                  ai_for(installation), metrics)
                                        for a in actions) if r]
             claimed = claim_issue(gh, repo, issue, author, comment.get("body"))
             if claimed:
@@ -355,12 +372,25 @@ def _oauth_from_env() -> Optional[OAuthApp]:
     return OAuthApp(client_id, client_secret) if client_id and client_secret else None
 
 
+def _ai_from_env(env: Mapping[str, str] = os.environ
+                 ) -> Tuple[Optional[AIQueue], Dict[int, AIClient]]:
+    """The AI queue and each installation's own model, from the environment.
+
+    The queue exists when the server has a model or any installation does.
+    """
+    model = ai_from_env(env)
+    path = env.get("TIDEBOT_INSTALLATIONS", "").strip()
+    clients = installation_clients(load_installations(path)) if path else {}
+    return (AIQueue(model) if model or clients else None), clients
+
+
 def _app_from_env() -> FastAPI:
-    model = ai_from_env()
+    queue, clients = _ai_from_env()
     return create_app(os.environ.get("TIDEBOT_WEBHOOK_SECRET", ""),
                       StateStore(os.environ.get("TIDEBOT_STATE", DEFAULT_PATH)),
                       github=_github_from_env(),
-                      ai=AIQueue(model) if model else None,
+                      ai=queue,
+                      ai_clients=clients,
                       stats_token=os.environ.get("TIDEBOT_STATS_TOKEN"),
                       dashboard_origins=_origins(os.environ.get("TIDEBOT_DASHBOARD_ORIGINS", "")),
                       oauth=_oauth_from_env(),

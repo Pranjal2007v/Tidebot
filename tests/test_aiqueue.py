@@ -43,3 +43,25 @@ def test_waiting_note():
     assert waiting_note("ask", 1) == ("`/ask` is queued behind 1 other AI job; "
                                       "the answer will be posted here.")
     assert "behind 3 other AI jobs" in waiting_note("summarize", 3)
+
+
+def test_an_installation_with_its_own_model_shares_the_line():
+    q = AIQueue(client="server model")
+    own = q.using("their model")
+    gate = threading.Event()
+    seen = []
+    assert q.submit(lambda ai: gate.wait(5)) == 0
+    assert own.submit(lambda ai: seen.append(ai), "o/r") == 1
+    assert q.submit(lambda ai: seen.append(ai)) == 2
+    assert q.pending == 3
+    gate.set()
+    q.join()
+    assert seen == ["their model", "server model"]
+
+
+def test_the_wait_hook_hears_about_jobs_on_another_model():
+    waited = []
+    q = AIQueue(client=None, on_wait=lambda repo, s: waited.append(repo))
+    q.using("their model").submit(lambda ai: None, "o/r")
+    q.join()
+    assert waited == ["o/r"]
