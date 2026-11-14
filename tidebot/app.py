@@ -15,7 +15,9 @@ Set ``TIDEBOT_APP_ID`` and ``TIDEBOT_PRIVATE_KEY`` (the path to the App's
 ``.pem`` file) to let it reply, and the ``TIDEBOT_AI_*`` variables described
 in ``tidebot/ai.py`` to turn on AI commands. Set ``TIDEBOT_INSTALLATIONS`` to
 the path of a JSON file (see ``tidebot/installations.py``) to give some
-installations of the App their own model. Set ``TIDEBOT_STATS_TOKEN`` to
+installations of the App their own model, and
+``TIDEBOT_AI_MAX_PER_INSTALLATION`` to cap how many AI jobs one installation
+can have waiting (default 5, 0 for no cap). Set ``TIDEBOT_STATS_TOKEN`` to
 serve per-repo numbers at ``/api/stats/<owner>/<repo>`` (and the list of repos
 at ``/api/stats``) to callers that send it as a bearer token, and
 ``TIDEBOT_DASHBOARD_ORIGINS`` (comma-separated, such as
@@ -44,7 +46,7 @@ from fastapi.responses import JSONResponse, RedirectResponse
 
 from .ai import NOT_CONFIGURED, AIClient, ai_from_env
 from .aicommands import AI_HANDLERS, make_job, usage_error
-from .aiqueue import AIQueue, BoundQueue, waiting_note
+from .aiqueue import AIQueue, BoundQueue, QueueFull, full_note, waiting_note
 from .community import Community
 from .config import CONFIG_PATH, TideConfig, parse_config
 from .events import (claim_issue, issue_opened, pull_request_opened, pull_request_pushed,
@@ -77,6 +79,8 @@ ClientFactory = Callable[[int], GitHubClient]
 REMINDER_INTERVAL = 60
 # The cookie that holds a dashboard sign-in.
 SESSION_COOKIE = "tidebot_session"
+# AI jobs one installation may have waiting or running unless the env says otherwise.
+MAX_PER_INSTALLATION = 5
 # How long to trust a "can push" answer from GitHub, in seconds.
 PUSH_CHECK_TTL = 300
 # (event, action) pairs Tidebot answers automatically, with the payload key
@@ -105,9 +109,12 @@ def _reply_for(gh: GitHubClient, target: Target, action: Action,
         usage = usage_error(action.command)
         if usage or ai is None:
             return usage or f"`/{name}`: {NOT_CONFIGURED}"
-        return waiting_note(name, ai.submit(make_job(gh, target, action.command,
-                                                   metrics.record_reply),
-                                                  target.repo))
+        try:
+            ahead = ai.submit(make_job(gh, target, action.command, metrics.record_reply),
+                              target.repo)
+        except QueueFull as err:
+            return full_note(name, err.limit)
+        return waiting_note(name, ahead)
     try:
         if community.handles(name):
             return community.run(gh, target, action.command)
@@ -143,13 +150,16 @@ def create_app(secret: str, store: StateStore,
         ai.on_wait = metrics.record_wait
 
     def ai_for(installation: Optional[int]) -> Union[AIQueue, BoundQueue, None]:
-        """The queue as this installation sees it, or None when it has no model."""
+        """The queue as this installation sees it, or None when it has no model.
+
+        Jobs are counted against the installation, so the queue's cap applies.
+        """
         if ai is None:
             return None
         own = ai_clients.get(installation)
-        if own is not None:
-            return ai.using(own)
-        return ai if ai.client is not None else None
+        if own is None and ai.client is None:
+            return None
+        return ai.using(own if own is not None else ai.client, installation)
 
     def deliver_reminders() -> None:
         try:
@@ -381,7 +391,20 @@ def _ai_from_env(env: Mapping[str, str] = os.environ
     model = ai_from_env(env)
     path = env.get("TIDEBOT_INSTALLATIONS", "").strip()
     clients = installation_clients(load_installations(path)) if path else {}
-    return (AIQueue(model) if model or clients else None), clients
+    if not model and not clients:
+        return None, clients
+    return AIQueue(model, per_installation=per_installation_cap(env)), clients
+
+
+def per_installation_cap(env: Mapping[str, str] = os.environ) -> int:
+    """``TIDEBOT_AI_MAX_PER_INSTALLATION`` as a number; ValueError when it isn't one."""
+    text = env.get("TIDEBOT_AI_MAX_PER_INSTALLATION", "").strip()
+    if not text:
+        return MAX_PER_INSTALLATION
+    if not text.isdigit():
+        raise ValueError("TIDEBOT_AI_MAX_PER_INSTALLATION must be a whole number, "
+                         "0 for no cap")
+    return int(text)
 
 
 def _app_from_env() -> FastAPI:

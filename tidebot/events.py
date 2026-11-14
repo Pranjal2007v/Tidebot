@@ -10,7 +10,7 @@ from __future__ import annotations
 import re
 from typing import Callable, List, Optional
 
-from .aiqueue import AIQueue
+from .aiqueue import AIQueue, QueueFull
 from .config import TideConfig
 from .duplicates import confirm_borderline, duplicates_comment, split_matches, tokens
 from .github import GitHubClient, GitHubError
@@ -136,6 +136,7 @@ def report_duplicates(gh: GitHubClient, repo: str, issue: dict,
 
     With a model configured, borderline matches are checked on the AI queue
     and the one reply is posted from there, so the webhook isn't held up.
+    When the installation's queue is full, only the strong matches are posted.
     """
     if is_bot((issue.get("user") or {}).get("login", "")):
         return
@@ -155,8 +156,12 @@ def report_duplicates(gh: GitHubClient, repo: str, issue: dict,
     if ai is None or not borderline:
         post(strong)
         return
-    ai.submit(lambda model: post(confirm_borderline(model, issue, others, strong, borderline)),
-              repo)
+    try:
+        ai.submit(lambda model: post(confirm_borderline(model, issue, others, strong,
+                                                        borderline)),
+                  repo)
+    except QueueFull:
+        post(strong)
 
 
 def content_labels(gh: GitHubClient, repo: str, issue: dict) -> List[str]:

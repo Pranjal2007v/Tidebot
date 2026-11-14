@@ -306,3 +306,22 @@ def test_duplicates_hook_hears_only_issues_that_got_a_comment():
     issue_opened(gh, "o/r", {"number": 5, "title": "Add a dark theme"},
                  config, on_duplicates=lambda *a: heard.append(a))
     assert heard == [("o/r", 4)]
+
+
+def test_a_full_queue_still_posts_the_strong_duplicates():
+    from tidebot.aiqueue import QueueFull
+
+    class Full:
+        def submit(self, job, repo=""):
+            raise QueueFull(7, 1)
+
+    gh = FakeGitHub(issues=[
+        {"number": 1, "title": "Webhook crashes on startup",
+         "body": "Crash when state file is missing on first run."},
+        {"number": 2, "title": "Receiver fails when the state file is missing",
+         "body": "Starting the receiver errors out."}])
+    issue = {"number": 9, "title": "Webhook crashes on startup",
+             "body": "The receiver crashes when the state file is missing."}
+    issue_opened(gh, "o/r", issue, TideConfig(triage_label=False, auto_label=False), ai=Full())
+    (_, _, number, body), = gh.calls[1:]
+    assert number == 9 and "#1 Webhook crashes on startup" in body

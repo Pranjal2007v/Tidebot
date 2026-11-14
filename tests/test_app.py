@@ -408,3 +408,41 @@ def test_queue_and_installation_models_come_from_the_environment(tmp_path):
     path.write_text("{")
     with pytest.raises(InstallationsError):
         _ai_from_env({"TIDEBOT_INSTALLATIONS": str(path)})
+
+
+def test_an_installation_at_its_cap_is_told_and_nothing_is_queued():
+    import threading
+
+    from tidebot.aiqueue import AIQueue
+
+    gate = threading.Event()
+    queue = AIQueue(NamedModel("the server's"), per_installation=1)
+    queue.using(None, installation=7).submit(lambda ai: gate.wait(5))
+    gh = AskGitHub()
+    c = TestClient(create_app(SECRET, StateStore(None), github=lambda i: gh, ai=queue))
+    payload = issue_payload(":tide /ask where is auth?")
+    payload["installation"] = {"id": 7}
+    post(c, "issue_comment", payload)
+    assert gh.calls == [("post_comment", "o/r", 3,
+                         "`/ask` wasn't queued: this installation already has 1 AI job "
+                         "waiting. Try again once those answers are posted.")]
+    assert queue.pending == 1
+    gate.set()
+    queue.join()
+    # Another installation was never blocked, and 7 gets in once its job is done.
+    assert ask_as(8, queue, {}) == [
+        ("post_comment", "o/r", 3, "`/ask` for @alice:\n\nanswered by the server's")]
+    assert ask_as(7, queue, {}) == [
+        ("post_comment", "o/r", 3, "`/ask` for @alice:\n\nanswered by the server's")]
+
+
+def test_the_cap_comes_from_the_environment():
+    from tidebot.app import MAX_PER_INSTALLATION, _ai_from_env, per_installation_cap
+
+    model = {"TIDEBOT_AI_URL": "https://a.example/v1", "TIDEBOT_AI_MODEL": "m"}
+    assert _ai_from_env(model)[0].per_installation == MAX_PER_INSTALLATION == 5
+    assert _ai_from_env(dict(model, TIDEBOT_AI_MAX_PER_INSTALLATION="2"))[0].per_installation == 2
+    assert per_installation_cap({"TIDEBOT_AI_MAX_PER_INSTALLATION": "0"}) == 0
+    for bad in ("-1", "lots", "2.5"):
+        with pytest.raises(ValueError, match="whole number"):
+            per_installation_cap({"TIDEBOT_AI_MAX_PER_INSTALLATION": bad})
