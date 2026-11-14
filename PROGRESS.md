@@ -436,3 +436,27 @@ The spec is [README.md](README.md). Work follows its [Roadmap](README.md#roadmap
 | B | ishitasharma2490 | ishitasharma2490@gmail.com | `c4f9d78946be0ef20bf5105bfa08ab0a8503ee24` | feat: read per-installation AI settings from a JSON file |
 | C | bitflicker64 | himnshuverma10152006@gmail.com | `e8a25156492dee71ab34f8d74874a414226ca36b` | feat: run each installation's AI jobs against its own model |
 | D | Payal-Phougat | 226825128+Payal-Phougat@users.noreply.github.com | `5a66e86b213d8b57fa14eb8c1b4cd8a50c1018c7` | feat: check the installations file in the doctor and document it |
+
+## Run 18 (2026-11-14)
+
+**Estimated complete:** 90%
+
+**Added**
+
+- The AI queue can cap how many jobs each installation has waiting or running (`AIQueue(per_installation=...)`). A job over the cap is refused with `QueueFull` instead of queued, and a finished or failed job frees its place.
+- `TIDEBOT_AI_MAX_PER_INSTALLATION` sets the cap: 5 by default, 0 for none. An AI command over the cap gets a reply saying it wasn't queued, and a new issue's duplicate check posts only its clear matches when the queue is full. Other installations are never held up.
+- When the App is uninstalled (`installation` event, `deleted`), the bot drops the reminders saved for that installation, since its token is gone and they could never be posted.
+- `python -m tidebot.doctor` has an `ai queue` line with the cap, and flags a cap that isn't a whole number. `docs/setup.md` covers the cap and the uninstall cleanup.
+
+**Next 5%**
+
+- Tick the hosted option in the [Roadmap](README.md#roadmap), point the README's [Getting started](README.md#getting-started) at `docs/setup.md`, and do a last pass that every README feature has a test.
+
+**Blockers:** none. The installations file and the cap are read once at startup, so a change needs a restart. Still not run against a live GitHub App or a real model endpoint.
+
+| Commit | GitHub | Email | SHA | Message |
+|---|---|---|---|---|
+| A | ishitasharma2490 | ishitasharma2490@gmail.com | `044d644df98b7613b12d55745d76255716702212` | feat: cap how many AI jobs each installation can queue |
+| B | bitflicker64 | himnshuverma10152006@gmail.com | `4ed1d2a0d8ea145271c6026ebd7e96ad50576024` | feat: refuse AI commands once an installation's queue share is full |
+| C | Payal-Phougat | 226825128+Payal-Phougat@users.noreply.github.com | `10eac384421e50746f80726b3b6643a2404ed217` | feat: drop an installation's reminders when the App is uninstalled |
+| D | Pranjal2007v | pranjalgangwar910@gmail.com | *(this commit, filled in next run)* | feat: show the AI queue cap in the doctor and document it |

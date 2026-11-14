@@ -46,7 +46,8 @@ from fastapi.responses import JSONResponse, RedirectResponse
 
 from .ai import NOT_CONFIGURED, AIClient, ai_from_env
 from .aicommands import AI_HANDLERS, make_job, usage_error
-from .aiqueue import AIQueue, BoundQueue, QueueFull, full_note, waiting_note
+from .aiqueue import (AIQueue, BoundQueue, QueueFull, full_note, per_installation_cap,
+                      waiting_note)
 from .community import Community
 from .config import CONFIG_PATH, TideConfig, parse_config
 from .events import (claim_issue, issue_opened, pull_request_opened, pull_request_pushed,
@@ -79,8 +80,6 @@ ClientFactory = Callable[[int], GitHubClient]
 REMINDER_INTERVAL = 60
 # The cookie that holds a dashboard sign-in.
 SESSION_COOKIE = "tidebot_session"
-# AI jobs one installation may have waiting or running unless the env says otherwise.
-MAX_PER_INSTALLATION = 5
 # How long to trust a "can push" answer from GitHub, in seconds.
 PUSH_CHECK_TTL = 300
 # (event, action) pairs Tidebot answers automatically, with the payload key
@@ -404,16 +403,6 @@ def _ai_from_env(env: Mapping[str, str] = os.environ
         return None, clients
     return AIQueue(model, per_installation=per_installation_cap(env)), clients
 
-
-def per_installation_cap(env: Mapping[str, str] = os.environ) -> int:
-    """``TIDEBOT_AI_MAX_PER_INSTALLATION`` as a number; ValueError when it isn't one."""
-    text = env.get("TIDEBOT_AI_MAX_PER_INSTALLATION", "").strip()
-    if not text:
-        return MAX_PER_INSTALLATION
-    if not text.isdigit():
-        raise ValueError("TIDEBOT_AI_MAX_PER_INSTALLATION must be a whole number, "
-                         "0 for no cap")
-    return int(text)
 
 
 def _app_from_env() -> FastAPI:

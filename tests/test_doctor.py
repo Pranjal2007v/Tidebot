@@ -44,7 +44,7 @@ def test_only_the_secret_leaves_the_rest_off(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     assert status({"TIDEBOT_WEBHOOK_SECRET": "s"}) == {
         "webhook": ON, "state": ON, "replies": OFF, "ai": OFF, "installations": OFF,
-        "stats token": OFF, "dashboard": OFF, "sign-in": OFF}
+        "ai queue": OFF, "stats token": OFF, "dashboard": OFF, "sign-in": OFF}
 
 
 def test_missing_secret_is_an_error(env):
@@ -123,3 +123,29 @@ def test_a_wrong_installations_file_is_an_error(env, tmp_path):
     env["TIDEBOT_INSTALLATIONS"] = str(tmp_path / "gone.json")
     assert installations(env).status == ERROR
     assert main(env, io.StringIO()) == 1
+
+
+def queue_line(env):
+    return [c for c in check(env) if c.feature == "ai queue"][0]
+
+
+def test_ai_queue_line_shows_the_cap(env):
+    assert queue_line(env) == ("ai queue", ON, "each installation can have 5 AI jobs waiting")
+    env["TIDEBOT_AI_MAX_PER_INSTALLATION"] = "1"
+    assert queue_line(env).message == "each installation can have 1 AI job waiting"
+    env["TIDEBOT_AI_MAX_PER_INSTALLATION"] = "0"
+    assert queue_line(env).message == "no cap: one installation can fill the queue"
+
+
+def test_ai_queue_line_is_on_with_only_installation_models(env):
+    del env["TIDEBOT_AI_URL"], env["TIDEBOT_AI_MODEL"]
+    assert queue_line(env).status == ON
+
+
+def test_a_bad_cap_is_an_error_even_with_ai_off(env):
+    env["TIDEBOT_AI_MAX_PER_INSTALLATION"] = "many"
+    assert queue_line(env).status == ERROR
+    for name in ("TIDEBOT_AI_URL", "TIDEBOT_AI_MODEL", "TIDEBOT_INSTALLATIONS"):
+        del env[name]
+    assert queue_line(env) == ("ai queue", ERROR, "TIDEBOT_AI_MAX_PER_INSTALLATION must be "
+                                                  "a whole number, 0 for no cap")

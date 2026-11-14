@@ -437,7 +437,8 @@ def test_an_installation_at_its_cap_is_told_and_nothing_is_queued():
 
 
 def test_the_cap_comes_from_the_environment():
-    from tidebot.app import MAX_PER_INSTALLATION, _ai_from_env, per_installation_cap
+    from tidebot.aiqueue import MAX_PER_INSTALLATION, per_installation_cap
+    from tidebot.app import _ai_from_env
 
     model = {"TIDEBOT_AI_URL": "https://a.example/v1", "TIDEBOT_AI_MODEL": "m"}
     assert _ai_from_env(model)[0].per_installation == MAX_PER_INSTALLATION == 5

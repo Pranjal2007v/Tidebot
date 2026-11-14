@@ -33,6 +33,8 @@ Leave every other permission at "No access".
 - **Issue comment**
 - **Pull request**
 
+GitHub also sends every App its installation events without a checkbox. When someone uninstalls the App, the bot drops the `/remind` reminders saved for that installation, since it can no longer post them.
+
 Create the App, then on its settings page:
 
 1. Note the **App ID** for `TIDEBOT_APP_ID`.
@@ -98,4 +100,6 @@ Every account or organization that installs the App is one installation, and all
 
 Point `TIDEBOT_INSTALLATIONS` at the file and restart the bot. With Docker, mount it read-only next to the private key, such as `-v "$PWD/installations.json:/run/secrets/installations.json:ro"`. An installation the file doesn't list keeps using the server's model, or has no AI commands when the server has none. AI jobs from every installation still wait in one queue, so the server runs one model call at a time.
 
-The file holds API keys: never commit it (`.gitignore` already skips `installations.json`). `python -m tidebot.doctor` says how many installations it lists and names the installation and key when an entry is wrong.
+So that one busy installation can't fill that queue for everyone, each installation can have at most 5 AI jobs waiting or running at once. Set `TIDEBOT_AI_MAX_PER_INSTALLATION` to change the number, or to `0` to turn the cap off. A command over the cap gets a reply saying it wasn't queued, and a new issue's duplicate check posts only its clear matches without asking the model.
+
+The file holds API keys: never commit it (`.gitignore` already skips `installations.json`). `python -m tidebot.doctor` says how many installations it lists and names the installation and key when an entry is wrong, and its `ai queue` line shows the cap.

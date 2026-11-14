@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import List, Mapping, NamedTuple
 from urllib.parse import urlparse
 
+from .aiqueue import per_installation_cap
 from .installations import InstallationsError, load_installations
 
 ON, OFF, ERROR = "on", "off", "error"
@@ -47,6 +48,19 @@ def _group(env: Mapping[str, str], feature: str, names: List[str], on: str) -> C
 def _bad_origin(origin: str) -> bool:
     url = urlparse(origin)
     return url.scheme not in ("http", "https") or not url.netloc or url.path not in ("", "/")
+
+
+def _queue_check(env: Mapping[str, str], ai_on: bool) -> Check:
+    try:
+        cap = per_installation_cap(env)
+    except ValueError as err:
+        return Check("ai queue", ERROR, str(err))
+    if not ai_on:
+        return Check("ai queue", OFF, "no AI commands, so nothing is queued")
+    if cap == 0:
+        return Check("ai queue", ON, "no cap: one installation can fill the queue")
+    jobs = "job" if cap == 1 else "jobs"
+    return Check("ai queue", ON, f"each installation can have {cap} AI {jobs} waiting")
 
 
 def check(env: Mapping[str, str]) -> List[Check]:
@@ -99,6 +113,8 @@ def check(env: Mapping[str, str]) -> List[Check]:
             rest = ("the rest use " + _get(env, "TIDEBOT_AI_MODEL") if ai.status == ON
                     else "the rest have no AI commands")
             checks.append(Check("installations", ON, f"{own} own model; {rest}"))
+
+    checks.append(_queue_check(env, ai.status == ON or checks[-1].status == ON))
 
     if _get(env, "TIDEBOT_STATS_TOKEN"):
         checks.append(Check("stats token", ON, "the token can read every repo's numbers"))

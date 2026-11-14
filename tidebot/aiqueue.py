@@ -17,14 +17,17 @@ over the cap is refused with ``QueueFull`` instead of being queued.
 
 from __future__ import annotations
 
+import os
 import queue
 import threading
 import time
-from typing import Callable, Dict, Optional, Tuple
+from typing import Callable, Dict, Mapping, Optional, Tuple
 
 from .ai import AIClient
 
 Job = Callable[[AIClient], None]
+# AI jobs one installation may have waiting or running unless the env says otherwise.
+MAX_PER_INSTALLATION = 5
 # Called with the repo and the seconds a job waited before it started.
 WaitHook = Callable[[str, float], None]
 _Entry = Tuple[Job, str, float, Optional[AIClient], Optional[int]]
@@ -148,3 +151,14 @@ def full_note(name: str, limit: int) -> str:
     jobs = "job" if limit == 1 else "jobs"
     return (f"`/{name}` wasn't queued: this installation already has {limit} AI {jobs} "
             "waiting. Try again once those answers are posted.")
+
+
+def per_installation_cap(env: Mapping[str, str] = os.environ) -> int:
+    """``TIDEBOT_AI_MAX_PER_INSTALLATION`` as a number; ValueError when it isn't one."""
+    text = env.get("TIDEBOT_AI_MAX_PER_INSTALLATION", "").strip()
+    if not text:
+        return MAX_PER_INSTALLATION
+    if not (text.isascii() and text.isdigit()):
+        raise ValueError("TIDEBOT_AI_MAX_PER_INSTALLATION must be a whole number, "
+                         "0 for no cap")
+    return int(text)
