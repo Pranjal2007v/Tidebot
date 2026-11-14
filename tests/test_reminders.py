@@ -79,3 +79,15 @@ def test_pending_filters_by_repo():
     reminders.add("o/other", 1, 9, "a", 60, "")
     assert [r.repo for r in reminders.pending("o/r")] == ["o/r"]
     assert isinstance(reminders.pending()[0], Reminder)
+
+
+def test_dropping_an_installation_forgets_only_its_reminders():
+    store = StateStore(None)
+    reminders = Reminders(store, clock=Clock())
+    reminders.add("o/r", 1, 7, "alice", 3600, "one")
+    reminders.add("o/r", 2, 8, "bob", 3600, "two")
+    reminders.add("x/y", 3, 7, "carol", 7200, "three")
+    assert reminders.drop_installation(7) == 2
+    assert [r.author for r in reminders.pending()] == ["bob"]
+    assert reminders.drop_installation(7) == 0
+    assert len(store.get(STATE_KEY)) == 1

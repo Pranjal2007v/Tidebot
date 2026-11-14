@@ -446,3 +446,30 @@ def test_the_cap_comes_from_the_environment():
     for bad in ("-1", "lots", "2.5"):
         with pytest.raises(ValueError, match="whole number"):
             per_installation_cap({"TIDEBOT_AI_MAX_PER_INSTALLATION": bad})
+
+
+def test_uninstalling_the_app_drops_that_installations_reminders():
+    from tidebot.reminders import Reminders
+
+    store = StateStore(None)
+    Reminders(store).add("o/r", 3, 7, "alice", 3600, "check CI")
+    Reminders(store).add("p/q", 4, 8, "bob", 3600, "")
+    c = TestClient(create_app(SECRET, store))
+    res = post(c, "installation", {"action": "deleted", "installation": {"id": 7}})
+    assert res.json() == {"ok": True, "handled": "installation", "dropped_reminders": 1,
+                          "actions": []}
+    assert [r.author for r in Reminders(store).pending()] == ["bob"]
+
+
+def test_other_installation_events_change_nothing():
+    from tidebot.reminders import Reminders
+
+    store = StateStore(None)
+    Reminders(store).add("o/r", 3, 7, "alice", 3600, "")
+    c = TestClient(create_app(SECRET, store))
+    for payload in ({"action": "created", "installation": {"id": 7}},
+                    {"action": "suspend", "installation": {"id": 7}},
+                    {"action": "deleted", "installation": {}}):
+        res = post(c, "installation", payload)
+        assert res.json()["ignored"] == "installation"
+    assert len(Reminders(store).pending()) == 1

@@ -80,6 +80,18 @@ class Reminders:
     def pending(self, repo: Optional[str] = None) -> List[Reminder]:
         return [r for r in self._all() if repo is None or r.repo == repo]
 
+    def drop_installation(self, installation: int) -> int:
+        """Forget every reminder from ``installation`` and return how many there were.
+
+        Run when the App is uninstalled: its token is gone, so they could
+        never be posted.
+        """
+        reminders = self._all()
+        keep = [r for r in reminders if r.installation != installation]
+        if len(keep) != len(reminders):
+            self._save(keep)
+        return len(reminders) - len(keep)
+
     def deliver_due(self, github: Callable[[int], GitHubClient]) -> int:
         """Post every reminder that is due and return how many were posted.
 

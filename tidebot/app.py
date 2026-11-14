@@ -297,6 +297,15 @@ def create_app(secret: str, store: StateStore,
 
         if event == "ping":
             return {"ok": True, "actions": []}
+        if event == "installation":
+            # GitHub Apps always get this event. Uninstalling revokes the
+            # token, so reminders saved for that installation are dropped.
+            gone = payload.get("installation", {}).get("id")
+            if payload.get("action") != "deleted" or not isinstance(gone, int):
+                return {"ok": True, "ignored": event, "actions": []}
+            dropped = community.reminders.drop_installation(gone)
+            return {"ok": True, "handled": event, "dropped_reminders": dropped,
+                    "actions": []}
 
         repo = payload.get("repository", {}).get("full_name", "")
         installation = payload.get("installation", {}).get("id")
