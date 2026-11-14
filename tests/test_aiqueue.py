@@ -65,3 +65,57 @@ def test_the_wait_hook_hears_about_jobs_on_another_model():
     q.using("their model").submit(lambda ai: None, "o/r")
     q.join()
     assert waited == ["o/r"]
+
+
+def test_an_installation_at_the_cap_is_refused_and_others_still_get_in():
+    import pytest
+    from tidebot.aiqueue import QueueFull
+    q = AIQueue(client="model", per_installation=2)
+    gate = threading.Event()
+    busy = q.using("model", installation=1)
+    assert busy.submit(lambda ai: gate.wait(5)) == 0
+    assert busy.submit(lambda ai: None) == 1
+    with pytest.raises(QueueFull) as err:
+        busy.submit(lambda ai: None)
+    assert err.value.installation == 1 and err.value.limit == 2
+    assert q.pending == 2 and q.pending_for(1) == 2
+    assert q.using("model", installation=2).submit(lambda ai: None) == 2
+    gate.set()
+    q.join()
+    assert q.pending_for(1) == 0 and q.pending_for(2) == 0
+    assert busy.submit(lambda ai: None) == 0
+    q.join()
+
+
+def test_no_cap_by_default_and_jobs_without_an_installation_are_never_capped():
+    q = AIQueue(client="model")
+    gate = threading.Event()
+    for _ in range(20):
+        q.submit(lambda ai: gate.wait(5), installation=7)
+    capped = AIQueue(client="model", per_installation=1)
+    capped.submit(lambda ai: gate.wait(5))
+    capped.submit(lambda ai: None)
+    assert q.pending_for(7) == 20 and capped.pending == 2
+    gate.set()
+    q.join()
+    capped.join()
+
+
+def test_a_failing_job_still_frees_its_place():
+    q = AIQueue(client=None, per_installation=1)
+
+    def boom(ai):
+        raise RuntimeError("nope")
+
+    q.submit(boom, installation=3)
+    q.join()
+    assert q.pending_for(3) == 0
+    q.submit(lambda ai: None, installation=3)
+    q.join()
+
+
+def test_full_note():
+    from tidebot.aiqueue import full_note
+    assert full_note("ask", 1).startswith("`/ask` wasn't queued: this installation already "
+                                          "has 1 AI job waiting.")
+    assert "has 5 AI jobs waiting" in full_note("review", 5)

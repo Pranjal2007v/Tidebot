@@ -435,4 +435,4 @@ The spec is [README.md](README.md). Work follows its [Roadmap](README.md#roadmap
 | A | Pranjal2007v | pranjalgangwar910@gmail.com | `ec140e00a0094200e4598dfcbb457e84fa970364` | feat: report the AI queue length on /healthz |
 | B | ishitasharma2490 | ishitasharma2490@gmail.com | `c4f9d78946be0ef20bf5105bfa08ab0a8503ee24` | feat: read per-installation AI settings from a JSON file |
 | C | bitflicker64 | himnshuverma10152006@gmail.com | `e8a25156492dee71ab34f8d74874a414226ca36b` | feat: run each installation's AI jobs against its own model |
-| D | Payal-Phougat | 226825128+Payal-Phougat@users.noreply.github.com | *(this commit, filled in next run)* | feat: check the installations file in the doctor and document it |
+| D | Payal-Phougat | 226825128+Payal-Phougat@users.noreply.github.com | `5a66e86b213d8b57fa14eb8c1b4cd8a50c1018c7` | feat: check the installations file in the doctor and document it |
