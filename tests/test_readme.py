@@ -81,3 +81,8 @@ def test_readme_links_resolve():
                for h in re.findall(r"^#+ (.+)$", README, re.M)}
     for anchor in re.findall(r"\]\(#([^)]+)\)", README):
         assert anchor in anchors, anchor
+
+
+def test_every_roadmap_item_is_ticked():
+    items = re.findall(r"^- \[( |x)\] ", readme_section("Roadmap"), re.M)
+    assert items and set(items) == {"x"}

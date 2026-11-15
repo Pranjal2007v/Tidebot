@@ -2,7 +2,7 @@
 
 **A maintainer's assistant for GitHub.** Tidebot is a GitHub App that handles the repetitive chores of running an open-source repo: labeling, duplicate checks, first-pass code review, reminders and merging, so maintainers can spend their time on the work that matters.
 
-> Status: early development. The name "Tidebot" is a placeholder.
+> Status: every [Roadmap](#roadmap) item is built and tested. It has not yet been run against a live GitHub App. The name "Tidebot" is a placeholder.
 
 ---
 ## Why Tidebot?
@@ -125,7 +125,7 @@ A companion website is planned with four parts:
 - [x] AI commands, review pipeline, duplicate detection
 - [x] Website: landing page, command reference, config builder
 - [x] Dashboard
-- [ ] Hosted option, so repos don't have to run it themselves
+- [x] Hosted option, so repos don't have to run it themselves
 
 ## Getting started
 

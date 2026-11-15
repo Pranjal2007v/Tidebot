@@ -1,4 +1,4 @@
-STATUS: IN PROGRESS
+STATUS: DONE
 
 # Tidebot build progress
 
@@ -460,3 +460,26 @@ The spec is [README.md](README.md). Work follows its [Roadmap](README.md#roadmap
 | B | bitflicker64 | himnshuverma10152006@gmail.com | `4ed1d2a0d8ea145271c6026ebd7e96ad50576024` | feat: refuse AI commands once an installation's queue share is full |
 | C | Payal-Phougat | 226825128+Payal-Phougat@users.noreply.github.com | `10eac384421e50746f80726b3b6643a2404ed217` | feat: drop an installation's reminders when the App is uninstalled |
 | D | Pranjal2007v | pranjalgangwar910@gmail.com | `a2b7ccc8e5e7be4a9146c5da270124d58cebc853` | feat: show the AI queue cap in the doctor and document it |
+
+## Run 19 (2026-11-15)
+
+**Estimated complete:** 100%
+
+**Added**
+
+- `tests/test_readme.py` checks the README against the code: each command group lists exactly the bot's commands, the rate limits, review batch size, suggestion cap and size labels match the constants, the [Permissions](README.md#permissions) table matches what the bot enforces, and every link and anchor in the README resolves.
+- The README's [Getting started](README.md#getting-started) is filled in and points at `docs/setup.md`.
+- The hosted option is ticked in the [Roadmap](README.md#roadmap): one server serves many installations, each with its own model (run 17) and a capped share of the AI queue (run 18). The status line now says every roadmap item is built and tested.
+
+**Next 5%**
+
+- None. Every README feature and roadmap item is built and tested, and the daily build can be turned off.
+
+**Blockers:** none. Still not run against a live GitHub App or a real model endpoint, so a first real install may turn up permission or payload details the tests don't cover.
+
+| Commit | GitHub | Email | SHA | Message |
+|---|---|---|---|---|
+| A | bitflicker64 | himnshuverma10152006@gmail.com | `35a8b8700a22b7430e1a892c6e6b24f146ba4b80` | test: check the README command lists against the bot |
+| B | Payal-Phougat | 226825128+Payal-Phougat@users.noreply.github.com | `5230a9c81c4ce1865d4a9e31e3836644ceec6ca5` | test: check the README's limits and permission table against the code |
+| C | Pranjal2007v | pranjalgangwar910@gmail.com | `fc11c090ec49fe332a354f0abe473412e5051502` | docs: fill in Getting started and point it at the setup guide |
+| D | ishitasharma2490 | ishitasharma2490@gmail.com | *(this commit; there is no next run)* | docs: tick the hosted option and mark the build done |
