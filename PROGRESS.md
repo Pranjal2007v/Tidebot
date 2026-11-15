@@ -459,4 +459,4 @@ The spec is [README.md](README.md). Work follows its [Roadmap](README.md#roadmap
 | A | ishitasharma2490 | ishitasharma2490@gmail.com | `044d644df98b7613b12d55745d76255716702212` | feat: cap how many AI jobs each installation can queue |
 | B | bitflicker64 | himnshuverma10152006@gmail.com | `4ed1d2a0d8ea145271c6026ebd7e96ad50576024` | feat: refuse AI commands once an installation's queue share is full |
 | C | Payal-Phougat | 226825128+Payal-Phougat@users.noreply.github.com | `10eac384421e50746f80726b3b6643a2404ed217` | feat: drop an installation's reminders when the App is uninstalled |
-| D | Pranjal2007v | pranjalgangwar910@gmail.com | *(this commit, filled in next run)* | feat: show the AI queue cap in the doctor and document it |
+| D | Pranjal2007v | pranjalgangwar910@gmail.com | `a2b7ccc8e5e7be4a9146c5da270124d58cebc853` | feat: show the AI queue cap in the doctor and document it |
