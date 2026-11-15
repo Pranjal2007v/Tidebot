@@ -129,11 +129,14 @@ A companion website is planned with four parts:
 
 ## Getting started
 
-Setup instructions are coming soon. In short:
+Tidebot runs on your own server for now. [docs/setup.md](docs/setup.md) walks through the whole setup; in short:
 
-1. Install the Tidebot GitHub App on your repo.
-2. Add a `.tide.yml` to configure it.
-3. Comment `:tide /help` on any issue or PR.
+1. Create a GitHub App with the permissions and events listed in the guide, pointed at your server's `/webhook`.
+2. Copy [.env.example](.env.example) to `.env`, fill in the App id, private key and webhook secret, and optionally an AI endpoint.
+3. Start the bot with Docker or `uvicorn`, then run `python -m tidebot.doctor` to check the settings.
+4. Install the App on a repo, add a `.tide.yml` if you want to change the defaults (see [Configuration](#configuration)), and comment `:tide /help` on any issue or PR.
+
+One server can serve many installations, each with its own model and a fair share of the AI queue; see the guide's last section.
 
 ## Contributing
 

@@ -66,3 +66,18 @@ def test_permission_table_matches_the_bot():
             assert required_tier(Command(name, ""), "someone") == expected[tier], name
     assert required_tier(Command("assign", ""), "someone") == Tier.COLLABORATOR
     assert required_tier(Command("assign", "@other"), "someone") == Tier.MAINTAINER
+
+
+def test_getting_started_points_at_the_setup_guide():
+    steps = readme_section("Getting started")
+    assert "(docs/setup.md)" in steps and "(.env.example)" in steps
+    assert ":tide /help" in steps
+
+
+def test_readme_links_resolve():
+    for target in re.findall(r"\]\(([^)#:]+)(?:#[^)]*)?\)", README):
+        assert (ROOT / target).exists(), target
+    anchors = {re.sub(r"[^a-z0-9 -]", "", h.lower()).replace(" ", "-")
+               for h in re.findall(r"^#+ (.+)$", README, re.M)}
+    for anchor in re.findall(r"\]\(#([^)]+)\)", README):
+        assert anchor in anchors, anchor
